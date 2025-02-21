@@ -1,10 +1,9 @@
-# in this version I add in the __name__ == "main" function
-# I also change the "plot" button command to a lambda function so the inputs don't need to be global variables
-# I also create a new class for the initial gui window
-# I also add in a new advanced settings class that opens a new gui window upon button press
-# I have also introduced a new variable in the advanced settings for the label font size
-# I changed the scaling settings for font size when scroll wheel event occurs.
-# Added some more comments
+# in this version I created two new classes. One for the mosaic creation, and one for the newly added settings of the mosaic
+# now, in this version, you can create multiple mosaics that have settings that are entirely separate from one another!
+# update the individual mosaic settings on the fly! Create new mosaics with their own settings on a whim!
+
+# in this version I have also added new functions to allow for drawing circles on the zoomable tile image
+# later I will have this output the area of the cirlces, and allow for updating circle to ellipse shape
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -31,7 +30,7 @@ def defect_viewer(self):
     db_origin = self.db_file_var.get()
     scan_id = self.scan_id_var.get()
     analysis_id = self.ana_id_var.get()
-    tile_size = int(self.tile_size_var.get())
+    tile_size = int(self.tile_size_var.get())        
  
     def clicked(self, event, image_data, defect_data):
         """ Contains all functionality to support click event
@@ -40,7 +39,7 @@ def defect_viewer(self):
 
         # variables passed from the instance of Root
         # these variables must be adjusted back to initial values as defined in the Root object each time a click event happens
-        label_font_size = int(self.font_size_input.get())
+        label_font_size = int(self.font_size_input)
         
         # iterate through all image data rows, find selected image according to click event, image coords, and tile size
         for idx, img_row in enumerate(image_data):
@@ -87,11 +86,15 @@ def defect_viewer(self):
                         vbar.configure(command=self.__scroll_y)
                         # Bind events to the Canvas
                         self.canvas.bind('<Configure>', lambda event: self.__show_image())  # canvas is resized
+                        self.canvas.bind("<Return>", self.__destroy_circles) # remove all ellipse area measurements
                         self.canvas.bind('<ButtonPress-1>', self.__move_from)  # remember canvas position
                         self.canvas.bind('<B1-Motion>',     self.__move_to)  # move canvas to the new position
                         self.canvas.bind('<MouseWheel>', self.__wheel)  # zoom for Windows and MacOS, but not Linux
                         self.canvas.bind('<Button-5>',   self.__wheel)  # zoom for Linux, wheel scroll down
                         self.canvas.bind('<Button-4>',   self.__wheel)  # zoom for Linux, wheel scroll up
+                        self.canvas.bind("<ButtonPress-3>", self.__on_right_click) # initiate ellipse area measurement
+                        self.canvas.bind("<B3-Motion>", self.__on_right_click_drag) # enable dragging for drawing ellipse
+                        self.canvas.bind("<ButtonRelease-3>", self.__on_right_click_release) # finalize ellipse area measurement
                         # Handle keystrokes in idle mode, because program slows down on a weak computers,
                         # when too many key stroke events in the same time
                         self.canvas.bind('<Key>', lambda event: self.canvas.after_idle(self.__keystroke, event))
@@ -273,6 +276,34 @@ def defect_viewer(self):
 
                             self.canvas.lower(imageid)  # set image into background
                             self.canvas.imagetk = imagetk  # keep an extra reference to prevent garbage-collection
+                    
+                    def __on_right_click(self, event):
+                        self.start_x = self.canvas.canvasx(event.x)
+                        self.start_y = self.canvas.canvasy(event.y)
+                    
+                    def __on_right_click_drag(self, event):
+                      if self.start_x is not None and self.start_y is not None:
+                        self.canvas.delete("temp_circle")
+                        radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                        self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
+                                                self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
+                                                self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
+                                                outline='black', tags="temp_circle")
+                    
+                    def __on_right_click_release(self, event):
+                        if self.start_x is not None and self.start_y is not None:
+                            self.canvas.delete("temp_circle")
+                            radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                            self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
+                                                    self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
+                                                    self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
+                                                    outline='black', tags="final_area_circle")
+                            self.start_x = None
+                            self.start_y = None
+
+                    def __destroy_circles(self, event):
+                        for item in self.canvas.find_withtag("final_area_circle"):
+                            self.canvas.delete(item)
                 
                     def __move_from(self, event):
                         """ Remember previous coordinates for scrolling with the mouse """
@@ -326,7 +357,7 @@ def defect_viewer(self):
                             new_font_size = math.floor(rounding_indicator)
                         else:
                             new_font_size = math.ceil(rounding_indicator)
-                        print(label_font_size, rounding_indicator)
+                        #print(label_font_size, rounding_indicator)
                         # once font size of 1 is reached, we need to make sure to keep track of scaling trends as we continue to demagnify image
                         # if not, we will scale the font size too quickly while magnifying the image
                         # the line of code below accomplishes the tracking by essentially recording the current number of scaling events
@@ -378,7 +409,7 @@ def defect_viewer(self):
                         self.canvas.destroy()
                         self.__imframe.destroy()
                 
-                class MainWindow(ttk.Frame):
+                class TileWindow(ttk.Frame):
                     """ Main window class """
                     def __init__(self, mainframe, path, window_name):
                         """ Initialize the main Frame """
@@ -394,7 +425,7 @@ def defect_viewer(self):
                 filename = image_origin + img_row[2]  # place path to your image here
                 tile_name = img_row[2] # get the name of the currently selected tile 
                 print(tile_name)
-                app = MainWindow(tk.Toplevel(), path=filename, window_name = tile_name)
+                app = TileWindow(tk.Toplevel(), path=filename, window_name = tile_name)
                 app.mainloop()
 
     # This portion of defect_view function serves to plot the initial mosaic with associated defects
@@ -412,31 +443,79 @@ def defect_viewer(self):
     mosaic_window = tk.Toplevel()
     sample_name = (db_origin.split("/"))[-1]
     mosaic_window.title(sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(analysis_id))
-
-    # create the canvas with size according to input tile size
-    canvas = Canvas(mosaic_window, width = tile_size*(max((image_data[:,8:9]).astype(int))[0]+1), 
-                    height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
-
-    # iterate through all rows of image data, plot each tile on the canvas
-    images = []
-    for idx, img_row in enumerate(image_data):
-        image = Image.open(image_origin + img_row[2]) 
-        image = image.resize((tile_size,tile_size),Image.LANCZOS) # resize tile and interpolate
-        images.append(ImageTk.PhotoImage(image))
-        canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=images[idx]) 
-
-    # iterate through all rows of defect data, plot each defect on the canvas
-    for idx, def_row in enumerate(defect_data):
-        row_index = np.where(np.any(image_data[:,0:1].astype(float) == float(def_row[1]), axis=1))[0] # find the tile where defect resides
-        x = float(def_row[13]) * (tile_size / float((image_data[row_index,9])[0])) # scale defect coords according to image scale
-        y = float(def_row[14]) * (tile_size / float((image_data[row_index,10])[0]))
-        scale = 20
-        canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, outline = 'red', fill = "red")
     
-    canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
+    class MosaicAdvanced:
+        def __init__(self):
+            self.initial_panel()
+
+        def initial_panel(self):
+            """ Create initial advanced settings panel """     
+            self.adv_window = tk.Toplevel()
+            self.adv_window.title('Advanced Settings')
     
-    canvas.pack()
-     
+            self.outline = tk.StringVar(self.adv_window, value='red')
+            tk.Label(self.adv_window, text='Outline').grid(row=0, column = 0, columnspan = 1)
+            self.e1 = tk.Entry(self.adv_window, textvariable = self.outline, width = 5)
+            self.e1.grid(row = 0, column = 1, columnspan = 2)
+
+            self.font_size_input = tk.StringVar(self.adv_window, value='6')
+            tk.Label(self.adv_window, text='Font Size').grid(row=1, column = 0, columnspan = 1)
+            self.e2 = tk.Entry(self.adv_window, textvariable = self.font_size_input, width = 5)
+            self.e2.grid(row = 1, column = 1, columnspan = 2)
+    
+            button_accept = tk.Button(self.adv_window, text='Accept', width = 10,  
+                                    command = lambda arg = self.outline, arg1 = self.font_size_input: self.return_choices(arg, arg1))
+            button_accept.grid(row = 2, column = 3)
+    
+            button_close = tk.Button(self.adv_window, text='Close', width = 10, command=self.adv_window.destroy)
+            button_close.grid(row = 3, column = 3)
+            
+        def return_choices(self, arg, arg1):
+            """ Sends input settings back to Root """     
+            newlol.outline = arg.get()
+            newlol.font_size_input = arg1.get()
+            newlol.lol()
+
+    class LOL:
+        def __init__(self):
+            self.outline = "red"
+            self.font_size_input = "6"
+            self.lol()
+
+        def call_advanced(self):
+            MosaicAdvanced()
+    
+        def lol(self):
+
+            for child in mosaic_window.winfo_children(): child.destroy()
+            # create the canvas with size according to input tile size
+            canvas = Canvas(mosaic_window, width = tile_size*(max((image_data[:,8:9]).astype(int))[0]+1), 
+                            height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
+        
+            button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_advanced)
+        
+            # iterate through all rows of image data, plot each tile on the canvas
+            self.images = []
+            for idx, img_row in enumerate(image_data):
+                image = Image.open(image_origin + img_row[2]) 
+                image = image.resize((tile_size,tile_size),Image.LANCZOS) # resize tile and interpolate
+                self.images.append(ImageTk.PhotoImage(image))
+                canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=self.images[idx]) 
+        
+            # iterate through all rows of defect data, plot each defect on the canvas
+            for idx, def_row in enumerate(defect_data):
+                row_index = np.where(np.any(image_data[:,0:1].astype(float) == float(def_row[1]), axis=1))[0] # find the tile where defect resides
+                x = float(def_row[13]) * (tile_size / float((image_data[row_index,9])[0])) # scale defect coords according to image scale
+                y = float(def_row[14]) * (tile_size / float((image_data[row_index,10])[0]))
+                scale = 20
+                canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, outline = self.outline, fill = "red")
+            
+            canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
+            
+            canvas.pack()
+            button_advanced.pack()
+
+    newlol = LOL()
     mosaic_window.mainloop()
 
 class AdvancedSettings:
