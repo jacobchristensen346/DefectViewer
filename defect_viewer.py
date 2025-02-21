@@ -1,5 +1,4 @@
-# Here is a script that outputs an array of images which can be clicked on to open a new image that is zoomable
-# The code for the zoomable image that is opened was found online here: https://stackoverflow.com/questions/41656176/tkinter-canvas-zoom-move-pan/48137257#48137257
+# For this version here I added in an extra gui window to enter in all desired input
 
 from PIL import Image, ImageTk
 import os
@@ -14,9 +13,16 @@ import numpy as np
 import math
 import warnings
 from tkinter import ttk
-import pandas as pd
-
-def defect_density(image_origin, db_origin, scan_id, analysis_id, tile_size, image_size):
+    
+def defect_viewer():
+    """Contains all the functionality of the app
+    Only activates once inputs selected in gui"""
+    
+    image_origin = img_loc_var.get() # Here we gather our variables of interest entered into the gui
+    db_origin = db_file_var.get()
+    scan_id = scan_id_var.get()
+    analysis_id = ana_id_var.get()
+    tile_size = int(tile_size_var.get())
  
     def clicked(event, position_data, defect_data):
         print(event)
@@ -187,14 +193,14 @@ def defect_density(image_origin, db_origin, scan_id, analysis_id, tile_size, ima
                         y1 = max(box_canvas[1] - box_image[1], 0)
                         x2 = min(box_canvas[2], box_image[2]) - box_image[0]
                         y2 = min(box_canvas[3], box_image[3]) - box_image[1]
-                        print(self.imwidth,self.imheight)
-                        print(box_image)
-                        print(box_canvas)
+                        #print(self.imwidth,self.imheight)
+                        #print(box_image)
+                        #print(box_canvas)
                         # now plot the defect on the current canvas image tile
                         for idx, def_row in enumerate(defect_data):
                                 if float(def_row[4]) == float(img_row[5]):
-                                    x = float(def_row[0])*box_image[2]/((float(img_row[3]) + float(img_row[4])) / 2)
-                                    y = float(def_row[1])*box_image[3]/((float(img_row[3]) + float(img_row[4])) / 2)
+                                    x = float(def_row[0])*box_image[2]/float(img_row[3])
+                                    y = float(def_row[1])*box_image[3]/float(img_row[4])
                                     scale = 30
                                     self.canvas.create_oval(x-box_image[2]/scale, y-box_image[3]/scale, x + box_image[2]/scale, y + box_image[3]/scale, outline = 'red', fill = "red")
                                     #self.canvas.lower(defect)
@@ -354,7 +360,9 @@ def defect_density(image_origin, db_origin, scan_id, analysis_id, tile_size, ima
                 app = MainWindow(tk.Toplevel(), path=filename)
                 app.mainloop()
 
-
+    # This portion of defect_view function serves to plot the initial mosaic with associated defects
+    # It is this mosaic where tiles can be selected from
+    
     conn = sqlite3.connect(db_origin)
     cur = conn.cursor()
     
@@ -364,11 +372,11 @@ def defect_density(image_origin, db_origin, scan_id, analysis_id, tile_size, ima
     position_data = np.array(cur.execute(sql_cmd_pos,(str(scan_id),)).fetchall())
     defect_data = np.array(cur.execute(sql_cmd_def,(str(analysis_id),)).fetchall())
 
-    defect_data = np.append(defect_data, position_data[0:len(defect_data),3:5], axis = 1)
+    defect_data = np.append(defect_data, position_data[0:len(defect_data),3:5], axis = 1) # we append the tile sizes (microns) for defect_data's usage
     
-    window = tk.Tk()
+    window = tk.Toplevel()
     
-    canvas = Canvas(width = tile_size*(max((position_data[:,2:3]).astype(int))[0]+1), height = tile_size*(max((position_data[:,1:2]).astype(int))[0]+1), bd = 0)
+    canvas = Canvas(window, width = tile_size*(max((position_data[:,2:3]).astype(int))[0]+1), height = tile_size*(max((position_data[:,1:2]).astype(int))[0]+1), bd = 0)
 
     images = []
     for idx, img_row in enumerate(position_data):
@@ -378,8 +386,9 @@ def defect_density(image_origin, db_origin, scan_id, analysis_id, tile_size, ima
         canvas.create_image(int(img_row[2])*tile_size, int(img_row[1])*tile_size, anchor=tk.NW, image=images[idx]) 
 
     for idx, def_row in enumerate(defect_data):
-        x = float(def_row[2]) * (tile_size / ((float(def_row[5])+float(def_row[6]))/2))
-        y = float(def_row[3]) * (tile_size / ((float(def_row[5])+float(def_row[6]))/2))
+        row_index = np.where(np.any(position_data[:,5:6].astype(float) == float(def_row[4]), axis=1))[0]
+        x = float(def_row[2]) * (tile_size / float((position_data[row_index,3])[0]))
+        y = float(def_row[3]) * (tile_size / float((position_data[row_index,4])[0]))
         scale = 20
         canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, outline = 'red', fill = "red")
     
@@ -389,16 +398,37 @@ def defect_density(image_origin, db_origin, scan_id, analysis_id, tile_size, ima
     canvas.pack()
      
     mainloop()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('-i', '--image_origin')
-    parser.add_argument('-d', '--db_origin')
-    parser.add_argument('-s', '--scan_id')
-    parser.add_argument('-a', '--analysis_id')
-    parser.add_argument('-c', '--tile_size')
-    parser.add_argument('-t', '--image_size')
-    args = parser.parse_args()
     
-    defect_density(args.image_origin, args.db_origin, args.scan_id, args.analysis_id, int(args.tile_size), int(args.image_size))
+
+root = tk.Tk()
+
+root.title('Defect View')
+
+img_loc_var = tk.StringVar()
+db_file_var = tk.StringVar()
+scan_id_var = tk.StringVar()
+ana_id_var = tk.StringVar()
+tile_size_var = tk.StringVar()
+
+tk.Label(root, text='Image Location').grid(row=0)
+tk.Label(root, text='Database File').grid(row=1)
+tk.Label(root, text='Scan ID').grid(row=2)
+tk.Label(root, text='Analysis ID').grid(row=3)
+tk.Label(root, text='Tile Size').grid(row=4)
+e1 = tk.Entry(root, textvariable = img_loc_var)
+e2 = tk.Entry(root, textvariable = db_file_var)
+e3 = tk.Entry(root, textvariable = scan_id_var)
+e4 = tk.Entry(root, textvariable = ana_id_var)
+e5 = tk.Entry(root, textvariable = tile_size_var)
+e1.grid(row=0, column=1)
+e2.grid(row=1, column=1)
+e3.grid(row=2, column=1)
+e4.grid(row=3, column=1)
+e5.grid(row=4, column=1)
+
+button1 = tk.Button(root, text='Plot', width=25, command=defect_viewer)
+button2 = tk.Button(root, text='Close', width=25, command=root.destroy)
+button1.grid(row = 5, column = 2)
+button2.grid(row = 6, column = 2)
+
+root.mainloop()
