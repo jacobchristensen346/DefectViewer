@@ -1,4 +1,6 @@
-# For this version here I added in an extra gui window to enter in all desired input
+# I update the gui with file explorer option
+# I update the defect markers to look better
+# also I add text labels...
 
 from PIL import Image, ImageTk
 import os
@@ -13,12 +15,13 @@ import numpy as np
 import math
 import warnings
 from tkinter import ttk
+from tkinter import filedialog
     
 def defect_viewer():
     """Contains all the functionality of the app
     Only activates once inputs selected in gui"""
     
-    image_origin = img_loc_var.get() # Here we gather our variables of interest entered into the gui
+    image_origin = img_loc_var.get() + '/' # Here we gather our variables of interest entered into the gui
     db_origin = db_file_var.get()
     scan_id = scan_id_var.get()
     analysis_id = ana_id_var.get()
@@ -28,7 +31,7 @@ def defect_viewer():
         print(event)
         #position_data[:,1:3]=position_data[:,1:3].astype(int)*tile_size
         for idx, img_row in enumerate(position_data):
-            if ((int(img_row[2])*tile_size <= (event.x) <= (int(img_row[2])+1)*tile_size) and (int(img_row[1])*tile_size <= (event.y) <= (int(img_row[1])+1)*tile_size)):
+            if ((int(img_row[8])*tile_size <= (event.x) <= (int(img_row[8])+1)*tile_size) and (int(img_row[7])*tile_size <= (event.y) <= (int(img_row[7])+1)*tile_size)):
                 #img = mpimg.imread('premium_photo-1673967831980-1d377baaded2.jpg')
                 #imgplot = plt.imshow(img)
                 #plt.show()
@@ -115,6 +118,7 @@ def defect_viewer():
                         self.container = self.canvas.create_rectangle((0, 0, self.imwidth, self.imheight), width=0)
                         self.__show_image()  # show image on the canvas
                         self.__show_defects()  # show defects on the canvas
+                        self.__show_labels() # show defect labels on the canvas
                         self.canvas.focus_set()  # set focus on the canvas
                 
                     def smaller(self):
@@ -185,25 +189,26 @@ def defect_viewer():
 
                     def __show_defects(self):
                         box_image = self.canvas.coords(self.container)  # get image area
-                        box_canvas = (self.canvas.canvasx(0),  # get visible area of the canvas
-                                      self.canvas.canvasy(0),
-                                      self.canvas.canvasx(self.canvas.winfo_width()),
-                                      self.canvas.canvasy(self.canvas.winfo_height()))
-                        x1 = max(box_canvas[0] - box_image[0], 0)  # get coordinates (x1,y1,x2,y2) of the image tile
-                        y1 = max(box_canvas[1] - box_image[1], 0)
-                        x2 = min(box_canvas[2], box_image[2]) - box_image[0]
-                        y2 = min(box_canvas[3], box_image[3]) - box_image[1]
-                        #print(self.imwidth,self.imheight)
-                        #print(box_image)
-                        #print(box_canvas)
+                        
                         # now plot the defect on the current canvas image tile
                         for idx, def_row in enumerate(defect_data):
-                                if float(def_row[4]) == float(img_row[5]):
-                                    x = float(def_row[0])*box_image[2]/float(img_row[3])
-                                    y = float(def_row[1])*box_image[3]/float(img_row[4])
+                                if float(def_row[1]) == float(img_row[0]):
+                                    x = float(def_row[4])*box_image[2]/float(img_row[9])
+                                    y = float(def_row[5])*box_image[3]/float(img_row[10])
                                     scale = 30
-                                    self.canvas.create_oval(x-box_image[2]/scale, y-box_image[3]/scale, x + box_image[2]/scale, y + box_image[3]/scale, outline = 'red', fill = "red")
-                                    #self.canvas.lower(defect)
+                                    self.canvas.create_oval(x-box_image[2]/scale, y-box_image[3]/scale, x + box_image[2]/scale, y + box_image[3]/scale, outline = 'red', fill = "", width = 1)
+
+                    def __show_labels(self):
+                        box_image = self.canvas.coords(self.container)  # get image area
+                        
+                        # now plot the defect labels on the current canvas image tile
+                        for idx, def_row in enumerate(defect_data):
+                                if float(def_row[1]) == float(img_row[0]):
+                                    x = float(def_row[4])*box_image[2]/float(img_row[9])
+                                    y = float(def_row[5])*box_image[3]/float(img_row[10])
+                                    scale = 60
+                                    font_size = -int(10*((box_image[2]*box_image[3])/(self.imheight*self.imwidth)))
+                                    self.canvas.create_text(x-box_image[2]/scale, y-box_image[3]/scale, text = "X = " + def_row[4] + ", Y = " + def_row[5], font=("Arial", font_size), tags = "text")
                 
                     def __show_image(self):
                         """ Show image on the Canvas. Implements correct image zoom almost like in Google Maps """
@@ -292,6 +297,11 @@ def defect_viewer():
                         self.__scale = k * math.pow(self.__reduction, max(0, self.__curr_img))
                         #
                         self.canvas.scale('all', x, y, scale, scale)  # rescale all objects
+                        box_image = self.canvas.coords(self.container)  # get image area
+                        self.font_size = -int(10*((box_image[2]*box_image[3])/(self.imheight*self.imwidth))) # rescale text
+                        for child_widget in self.canvas.find_withtag("text"):
+                            self.canvas.itemconfigure(child_widget, font=("Arial", self.font_size))
+                        print(scale)
                         # Redraw some figures before showing image on the screen
                         self.redraw_figures()  # method for child classes
                         self.__show_image()
@@ -338,10 +348,10 @@ def defect_viewer():
                 
                 class MainWindow(ttk.Frame):
                     """ Main window class """
-                    def __init__(self, mainframe, path):
+                    def __init__(self, mainframe, path, window_name):
                         """ Initialize the main Frame """
                         ttk.Frame.__init__(self, master=mainframe)
-                        self.master.title('Advanced Zoom v3.0')
+                        self.master.title(window_name)
                         self.master.geometry('800x600')  # size of the main window
                         self.master.rowconfigure(0, weight=1)  # make the CanvasImage widget expandable
                         self.master.columnconfigure(0, weight=1)
@@ -349,15 +359,10 @@ def defect_viewer():
                         canvas.grid(row=0, column=0)  # show widget
         
                 
-                filename = image_origin + img_row[0]  # place path to your image here
-                print(filename)
-                #filename = 'd:/Data/yandex_z18_1-1.tif'  # huge TIFF file 1.4 GB
-                #filename = 'd:/Data/The_Garden_of_Earthly_Delights_by_Bosch_High_Resolution.jpg'
-                #filename = 'd:/Data/The_Garden_of_Earthly_Delights_by_Bosch_High_Resolution.tif'
-                #filename = 'd:/Data/heic1502a.tif'
-                #filename = 'd:/Data/land_shallow_topo_east.tif'
-                #filename = 'd:/Data/X1D5_B0002594.3FR'
-                app = MainWindow(tk.Toplevel(), path=filename)
+                filename = image_origin + img_row[2]  # place path to your image here
+                tile_name = img_row[2] # get the name of the currently selected tile 
+                print(tile_name)
+                app = MainWindow(tk.Toplevel(), path=filename, window_name = tile_name)
                 app.mainloop()
 
     # This portion of defect_view function serves to plot the initial mosaic with associated defects
@@ -366,29 +371,31 @@ def defect_viewer():
     conn = sqlite3.connect(db_origin)
     cur = conn.cursor()
     
-    sql_cmd_pos = "SELECT Filename, R, C, wMicrons, hMicrons, ImageID FROM vwImages WHERE ScanID = ?;" 
-    sql_cmd_def = "SELECT X, Y, XinDevice, YinDevice, ImageID FROM vwDefectsLegacy WHERE AnalysisID = ?;" 
+    sql_cmd_pos = "SELECT * FROM vwImages WHERE ScanID = ?;" 
+    sql_cmd_def = "SELECT * FROM vwDefectsLegacy WHERE AnalysisID = ?;" 
     
     position_data = np.array(cur.execute(sql_cmd_pos,(str(scan_id),)).fetchall())
     defect_data = np.array(cur.execute(sql_cmd_def,(str(analysis_id),)).fetchall())
 
-    defect_data = np.append(defect_data, position_data[0:len(defect_data),3:5], axis = 1) # we append the tile sizes (microns) for defect_data's usage
+    #defect_data = np.append(defect_data, position_data[0:len(defect_data),3:5], axis = 1) # we append the tile sizes (microns) for defect_data's usage
     
     window = tk.Toplevel()
+    sample_name = (db_origin.split("/"))[-1]
+    window.title(sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(analysis_id))
     
-    canvas = Canvas(window, width = tile_size*(max((position_data[:,2:3]).astype(int))[0]+1), height = tile_size*(max((position_data[:,1:2]).astype(int))[0]+1), bd = 0)
+    canvas = Canvas(window, width = tile_size*(max((position_data[:,8:9]).astype(int))[0]+1), height = tile_size*(max((position_data[:,7:8]).astype(int))[0]+1), bd = 0)
 
     images = []
     for idx, img_row in enumerate(position_data):
-        image = Image.open(image_origin + img_row[0])  # Replace with your image path
+        image = Image.open(image_origin + img_row[2])  # Replace with your image path
         image = image.resize((tile_size,tile_size),Image.LANCZOS)
         images.append(ImageTk.PhotoImage(image))
-        canvas.create_image(int(img_row[2])*tile_size, int(img_row[1])*tile_size, anchor=tk.NW, image=images[idx]) 
+        canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=images[idx]) 
 
     for idx, def_row in enumerate(defect_data):
-        row_index = np.where(np.any(position_data[:,5:6].astype(float) == float(def_row[4]), axis=1))[0]
-        x = float(def_row[2]) * (tile_size / float((position_data[row_index,3])[0]))
-        y = float(def_row[3]) * (tile_size / float((position_data[row_index,4])[0]))
+        row_index = np.where(np.any(position_data[:,0:1].astype(float) == float(def_row[1]), axis=1))[0]
+        x = float(def_row[13]) * (tile_size / float((position_data[row_index,9])[0]))
+        y = float(def_row[14]) * (tile_size / float((position_data[row_index,10])[0]))
         scale = 20
         canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, outline = 'red', fill = "red")
     
@@ -398,7 +405,18 @@ def defect_viewer():
     canvas.pack()
      
     mainloop()
-    
+
+# Create the initial gui window for inputs
+
+def browse_file():
+    filename =filedialog.askopenfilename(filetypes=(("db files","*.db"),))
+    e2.delete(0, 'end')
+    e2.insert(tk.END, filename) 
+
+def browse_directory():
+    directory_name =filedialog.askdirectory()
+    e1.delete(0, 'end')
+    e1.insert(tk.END, directory_name)
 
 root = tk.Tk()
 
@@ -410,25 +428,30 @@ scan_id_var = tk.StringVar()
 ana_id_var = tk.StringVar()
 tile_size_var = tk.StringVar()
 
-tk.Label(root, text='Image Location').grid(row=0)
-tk.Label(root, text='Database File').grid(row=1)
-tk.Label(root, text='Scan ID').grid(row=2)
-tk.Label(root, text='Analysis ID').grid(row=3)
-tk.Label(root, text='Tile Size').grid(row=4)
-e1 = tk.Entry(root, textvariable = img_loc_var)
-e2 = tk.Entry(root, textvariable = db_file_var)
-e3 = tk.Entry(root, textvariable = scan_id_var)
-e4 = tk.Entry(root, textvariable = ana_id_var)
-e5 = tk.Entry(root, textvariable = tile_size_var)
-e1.grid(row=0, column=1)
-e2.grid(row=1, column=1)
-e3.grid(row=2, column=1)
-e4.grid(row=3, column=1)
-e5.grid(row=4, column=1)
+tk.Label(root, text='Image Location').grid(row = 0, column = 0, columnspan = 1)
+tk.Label(root, text='Database File').grid(row = 1, column = 0, columnspan = 1)
+tk.Label(root, text='Scan ID').grid(row = 2, column = 0, columnspan = 1)
+tk.Label(root, text='Analysis ID').grid(row = 3, column = 0, columnspan = 1)
+tk.Label(root, text='Tile Size').grid(row=4, column = 0, columnspan = 1)
+e1 = tk.Entry(root, textvariable = img_loc_var, width = 20)
+e2 = tk.Entry(root, textvariable = db_file_var, width = 20)
+e3 = tk.Entry(root, textvariable = scan_id_var, width = 10)
+e4 = tk.Entry(root, textvariable = ana_id_var, width = 10)
+e5 = tk.Entry(root, textvariable = tile_size_var, width = 10)
+e1.grid(row = 0, column = 2, columnspan = 2)
+e2.grid(row = 1, column = 2, columnspan = 2)
+e3.grid(row = 2, column = 2, columnspan = 1)
+e4.grid(row = 3, column = 2, columnspan = 1)
+e5.grid(row = 4, column = 2, columnspan = 1)
 
-button1 = tk.Button(root, text='Plot', width=25, command=defect_viewer)
-button2 = tk.Button(root, text='Close', width=25, command=root.destroy)
-button1.grid(row = 5, column = 2)
-button2.grid(row = 6, column = 2)
+button_file = tk.Button(root, text='...', width = 3, command=browse_file)
+button_directory = tk.Button(root, text='...', width = 3, command=browse_directory)
+button_file.grid(row = 1, column = 4)
+button_directory.grid(row = 0, column = 4)
+
+button_plot = tk.Button(root, text='Plot', width = 10, command=defect_viewer)
+button_close = tk.Button(root, text='Close', width = 10, command=root.destroy)
+button_plot.grid(row = 5, column = 5)
+button_close.grid(row = 6, column = 5)
 
 root.mainloop()
