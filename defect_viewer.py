@@ -1,9 +1,15 @@
-# in this version I created two new classes. One for the mosaic creation, and one for the newly added settings of the mosaic
-# now, in this version, you can create multiple mosaics that have settings that are entirely separate from one another!
-# update the individual mosaic settings on the fly! Create new mosaics with their own settings on a whim!
+# In this version I have added in a defect binning advanced settings window
+# The values are successfully transfered into the click function
+# Now I need to spend some time figuring out how to get the settings to save when opening and closing the settings
+# Right now the settings for binning reset when I open the settings back up
+# Also I need to make it so that the binning settings are used in the clicked window, right now they are only passed, not implemented
 
-# in this version I have also added new functions to allow for drawing circles on the zoomable tile image
-# later I will have this output the area of the cirlces, and allow for updating circle to ellipse shape
+# I addressed the issue of binning not being auto populated by previous choices upon closing and opening the settings window
+# now binning settings are passed through the heirarchal chain of class objects so the settings are saved at each level and retrievable
+
+# I have now applied the binning colors/ranges to the mosaic!
+# I also applied the binning colors/ranges to the defect marks within the selected tile!
+# updated some things related to placement of tkinter objects (buttons, entries, labels, etc.)
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -37,9 +43,12 @@ def defect_viewer(self):
             Is called upon click event """
         print(event)
 
-        # variables passed from the instance of Root
-        # these variables must be adjusted back to initial values as defined in the Root object each time a click event happens
-        label_font_size = int(self.font_size_input)
+        # variables passed from the instance of MosaicCreator
+        # these variables must be adjusted back to initial values as defined in the MosaicCreator object each time a click event happens
+        defect_binning_ranges = self.binning_ranges # binning ranges for defects, based on defect area
+        defect_binning_colors = self.binning_colors # binning colors for defects
+        defect_inf_bin_color = self.inf_bin_color # color for the defect bin which goes to infinity
+        label_font_size = int(self.font_size_defect_label) # font size for defect labels
         
         # iterate through all image data rows, find selected image according to click event, image coords, and tile size
         for idx, img_row in enumerate(image_data):
@@ -211,8 +220,14 @@ def defect_viewer(self):
                                     x = float(def_row[4])*box_image[2]/float(img_row[9]) # coordinates of defect scaled by image size
                                     y = float(def_row[5])*box_image[3]/float(img_row[10])
                                     scale = 30
+                                    bin_range_index = np.searchsorted(defect_binning_ranges, float(def_row[8])) # get index corresponding to binning range of defect area
+                                    # set defect mark color based on binning color corresponding to index found above
+                                    if (bin_range_index > (len(defect_binning_ranges) - 1)) or (defect_binning_ranges.size == 0):
+                                        bin_outline_color = defect_inf_bin_color
+                                    else:
+                                        bin_outline_color = defect_binning_colors[bin_range_index]
                                     self.canvas.create_oval(x-box_image[2]/scale, y-box_image[3]/scale, x + box_image[2]/scale, y + box_image[3]/scale, 
-                                                            outline = 'red', fill = "", width = 1)
+                                                            outline = bin_outline_color, fill = "", width = 1)
 
                     def __show_labels(self):
                         """ Plots defect labels on selected image """
@@ -282,13 +297,13 @@ def defect_viewer(self):
                         self.start_y = self.canvas.canvasy(event.y)
                     
                     def __on_right_click_drag(self, event):
-                      if self.start_x is not None and self.start_y is not None:
-                        self.canvas.delete("temp_circle")
-                        radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
-                        self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
-                                                self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
-                                                self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
-                                                outline='black', tags="temp_circle")
+                        if self.start_x is not None and self.start_y is not None:
+                            self.canvas.delete("temp_circle")
+                            radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                            self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
+                                                    self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
+                                                    self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
+                                                    outline='black', tags="temp_circle")
                     
                     def __on_right_click_release(self, event):
                         if self.start_x is not None and self.start_y is not None:
@@ -410,7 +425,7 @@ def defect_viewer(self):
                         self.__imframe.destroy()
                 
                 class TileWindow(ttk.Frame):
-                    """ Main window class """
+                    """ Main tile window class """
                     def __init__(self, mainframe, path, window_name):
                         """ Initialize the main Frame """
                         ttk.Frame.__init__(self, master=mainframe)
@@ -425,80 +440,212 @@ def defect_viewer(self):
                 filename = image_origin + img_row[2]  # place path to your image here
                 tile_name = img_row[2] # get the name of the currently selected tile 
                 print(tile_name)
+                # create an object of the TileWindow class
                 app = TileWindow(tk.Toplevel(), path=filename, window_name = tile_name)
                 app.mainloop()
 
     # This portion of defect_view function serves to plot the initial mosaic with associated defects
     # It is this mosaic where tiles can be selected from
-    
+
+    # connect to the database containing analysis and scan information
     conn = sqlite3.connect(db_origin)
     cur = conn.cursor()
-    
+
+    # sql queries used to retrieve defect and image data
     sql_cmd_pos = "SELECT * FROM vwImages WHERE ScanID = ?;" 
     sql_cmd_def = "SELECT * FROM vwDefectsLegacy WHERE AnalysisID = ?;" 
     
     image_data = np.array(cur.execute(sql_cmd_pos,(str(scan_id),)).fetchall()) # fetch all data from image table
     defect_data = np.array(cur.execute(sql_cmd_def,(str(analysis_id),)).fetchall()) # fetch all data from defect table
-    
+
+    # create a new tkinter window for plotting the mosaic of the scans
     mosaic_window = tk.Toplevel()
     sample_name = (db_origin.split("/"))[-1]
     mosaic_window.title(sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(analysis_id))
-    
-    class MosaicAdvanced:
+
+    class DefectBinning:
+        """ Defect Binning Class """
         def __init__(self):
-            self.initial_panel()
+            self.main_binning_window()
+            
+        def main_binning_window(self):
+            """ Create defect binning settings panel """
+            # create the defect binning tkinter window
+            self.defect_binning_window = tk.Toplevel()
+            self.defect_binning_window.title('Defect Binning')
 
-        def initial_panel(self):
-            """ Create initial advanced settings panel """     
-            self.adv_window = tk.Toplevel()
-            self.adv_window.title('Advanced Settings')
-    
-            self.outline = tk.StringVar(self.adv_window, value='red')
-            tk.Label(self.adv_window, text='Outline').grid(row=0, column = 0, columnspan = 1)
-            self.e1 = tk.Entry(self.adv_window, textvariable = self.outline, width = 5)
-            self.e1.grid(row = 0, column = 1, columnspan = 2)
+            self.row_num = len(mosaic_obj.mosaic_settings_obj.binning_colors) # dummy variable keeps track of number of defect binning ranges
+            self.list_of_entry_fields = np.empty((0,2)) # list to hold all entry variables for referencing
+            
+            # button used to add another defect binning range
+            button_add_range = tk.Button(self.defect_binning_window, text='Add Range', width = 11, command = self.add_binning_range)
+            button_add_range.grid(row = 0, column = 0)
 
-            self.font_size_input = tk.StringVar(self.adv_window, value='6')
-            tk.Label(self.adv_window, text='Font Size').grid(row=1, column = 0, columnspan = 1)
-            self.e2 = tk.Entry(self.adv_window, textvariable = self.font_size_input, width = 5)
-            self.e2.grid(row = 1, column = 1, columnspan = 2)
-    
-            button_accept = tk.Button(self.adv_window, text='Accept', width = 10,  
-                                    command = lambda arg = self.outline, arg1 = self.font_size_input: self.return_choices(arg, arg1))
+            # button to remove defect binning range
+            button_remove_range = tk.Button(self.defect_binning_window, text='Remove Range', width = 11, command = self.remove_binning_range)
+            button_remove_range.grid(row = 0, column = 1)
+
+            # button to accept binning and send to main mosaic settings window
+            self.button_set_binning = tk.Button(self.defect_binning_window, text='Set Binning', width = 10, command = self.set_binning_options)
+            self.button_set_binning.grid(row = self.row_num + 1, column = 3)
+
+            # button to close window without setting new binning
+            self.button_close = tk.Button(self.defect_binning_window, text='Close', width = 10, command=self.defect_binning_window.destroy)
+            self.button_close.grid(row = self.row_num + 2, column = 3)
+
+            # labels for the two columns, binning ceiling value and binning color value
+            tk.Label(self.defect_binning_window, text='Bin Ceiling').grid(row=1, column = 0, columnspan = 1)
+            tk.Label(self.defect_binning_window, text='Bin Color').grid(row=1, column = 1, columnspan = 1)
+
+            # add in infinity bin (bin that starts at final finite bin ceiling and goes to infinity)
+            self.inf_bin_color = tk.Entry(self.defect_binning_window, 
+                                          textvariable = tk.StringVar(self.defect_binning_window, value = mosaic_obj.mosaic_settings_obj.inf_bin_color), width = 8)
+            tk.Label(self.defect_binning_window, text='Infinity Bin Color').grid(row=0, column = 3, columnspan = 1)
+            self.inf_bin_color.grid(row=0, column=4)
+
+            # populate with previously saved choices...
+            for i in range(self.row_num):
+                self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                            [[tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window, value = mosaic_obj.mosaic_settings_obj.binning_ranges[i]), width = 10),
+                                              tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window, value = mosaic_obj.mosaic_settings_obj.binning_colors[i]), width = 10)]],axis = 0)
+                self.list_of_entry_fields[-1][0].grid(row=i+2, column=0)
+                self.list_of_entry_fields[-1][1].grid(row=i+2, column=1)
+            
+        def add_binning_range(self):
+            """ Adds a new defect binning range entry """
+            # iterate the number of fields we have
+            self.row_num = self.row_num + 1
+           
+            self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                            [[tk.Entry(self.defect_binning_window, width = 10),
+                                              tk.Entry(self.defect_binning_window, width = 10)]],axis = 0)
+            
+            # after appending we can use -1 to reference the last item appened
+            self.list_of_entry_fields[-1][0].grid(row=self.row_num + 1, column=0)
+            self.list_of_entry_fields[-1][1].grid(row=self.row_num + 1, column=1)
+            # now update the location of the accept and close buttons
+            self.button_set_binning.grid(row = self.row_num + 2, column = 3)
+            self.button_close.grid(row = self.row_num + 3, column = 3)
+
+        def remove_binning_range(self):
+            """ Removes most recent defect binning range entry """
+            if len(self.list_of_entry_fields) > 0:
+                (self.defect_binning_window.winfo_children()[-1]).destroy()
+                (self.defect_binning_window.winfo_children()[-1]).destroy()
+                # update the number of fields
+                self.list_of_entry_fields = self.list_of_entry_fields[:-1]
+                self.row_num = self.row_num - 1
+                # now update the location of the accept and close buttons
+                self.button_set_binning.grid(row = self.row_num + 2, column = 3)
+                self.button_close.grid(row = self.row_num + 3, column = 3)
+            else:
+                print('No binning ranges to remove')
+
+        def set_binning_options(self):
+            """ Send current binning options back to MosaicSettings """
+            def get_var_value(x):
+                return x.get()
+            
+            # we vectorize a function to get values out of StringVar
+            vectorized = np.vectorize(get_var_value)
+            if self.list_of_entry_fields.size == 0:
+                mosaic_obj.mosaic_settings_obj.binning_ranges = np.array([])
+                mosaic_obj.mosaic_settings_obj.binning_colors = np.array([])
+            else:
+                mosaic_obj.mosaic_settings_obj.binning_ranges = vectorized(self.list_of_entry_fields[:,0:1]).flatten().astype(float)
+                mosaic_obj.mosaic_settings_obj.binning_colors = vectorized(self.list_of_entry_fields[:,1:2]).flatten()
+            mosaic_obj.mosaic_settings_obj.inf_bin_color = self.inf_bin_color.get()
+        
+    class MosaicSettings:
+        """ Mosaic Settings Class """
+        def __init__(self):
+            # the binning ranges and colors below are received by the DefectBinning class (defect binning settings)
+            self.binning_ranges = mosaic_obj.binning_ranges # the desired binning ranges given in um^2
+            self.binning_colors = mosaic_obj.binning_colors # the desired binning colors
+            self.inf_bin_color = mosaic_obj.inf_bin_color # the desired infinity bin color
+            self.main_mosaic_settings()
+
+        def main_mosaic_settings(self):
+            """ Create initial advanced mosaic settings panel """   
+            # create the mosaic settings tkinter window
+            self.mosaic_settings_window = tk.Toplevel()
+            self.mosaic_settings_window.title('Mosaic Advanced Settings')
+
+            # # color of defect mark outline
+            # self.mark_outline = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.mark_outline)
+            # tk.Label(self.mosaic_settings_window, text='Defect Mark Outline').grid(row=0, column = 0, columnspan = 1)
+            # self.entry_mark_outline = tk.Entry(self.mosaic_settings_window, textvariable = self.mark_outline, width = 5)
+            # self.entry_mark_outline.grid(row = 0, column = 1, columnspan = 2)
+
+            # # color of defect mark fill
+            # self.mark_fill = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.mark_fill)
+            # tk.Label(self.mosaic_settings_window, text='Defect Mark Fill').grid(row=1, column = 0, columnspan = 1)
+            # self.entry_mark_fill = tk.Entry(self.mosaic_settings_window, textvariable = self.mark_fill, width = 5)
+            # self.entry_mark_fill.grid(row = 1, column = 1, columnspan = 2)
+
+            # font size of defect label text
+            self.font_size_defect_label = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.font_size_defect_label)
+            tk.Label(self.mosaic_settings_window, text='Defect Label Font Size').grid(row=1, column = 0, columnspan = 2)
+            self.entry_font_size_defect_label = tk.Entry(self.mosaic_settings_window, textvariable = self.font_size_defect_label, width = 5)
+            self.entry_font_size_defect_label.grid(row = 1, column = 2, columnspan = 2)
+
+            # button to open defect binning window
+            button_defect_binning = tk.Button(self.mosaic_settings_window, text='Binning', width = 10, command = self.call_defect_binning)
+            button_defect_binning.grid(row = 2, column = 1)
+
+            # button to apply settings
+            button_accept = tk.Button(self.mosaic_settings_window, text='Accept', width = 10, command = self.return_choices_mosaic)
             button_accept.grid(row = 2, column = 3)
-    
-            button_close = tk.Button(self.adv_window, text='Close', width = 10, command=self.adv_window.destroy)
+
+            # button to close without saving
+            button_close = tk.Button(self.mosaic_settings_window, text='Close', width = 10, command=self.mosaic_settings_window.destroy)
             button_close.grid(row = 3, column = 3)
             
-        def return_choices(self, arg, arg1):
-            """ Sends input settings back to Root """     
-            newlol.outline = arg.get()
-            newlol.font_size_input = arg1.get()
-            newlol.lol()
 
-    class LOL:
+        def call_defect_binning(self):
+            """ Creates instance of DefectBinning class """
+            self.defect_binning_obj = DefectBinning()
+            
+        def return_choices_mosaic(self):
+            """ Sends input settings back to MosaicCreator """  
+            mosaic_obj.font_size_defect_label = self.font_size_defect_label.get()
+            mosaic_obj.binning_ranges = self.binning_ranges
+            mosaic_obj.binning_colors = self.binning_colors
+            mosaic_obj.inf_bin_color = self.inf_bin_color
+            
+            # re-plot the mosaic with the new settings
+            mosaic_obj.plot_mosaic()
+
+    class MosaicCreator:
+        """ Create Mosaic With Selectable Tiles """
         def __init__(self):
-            self.outline = "red"
-            self.font_size_input = "6"
-            self.lol()
+            # initialize variables to default values, may be overwritten by advanced mosaic settings
+            #self.mark_outline = "red"
+            #self.mark_fill = "red"
+            self.font_size_defect_label = "6"
+            self.binning_ranges = np.array([]) # the desired binning ranges and colors are passed from DefectBinning to MosaicSettings to MosaicCreator
+            self.binning_colors = np.array([]) 
+            self.inf_bin_color = 'red'
+            self.plot_mosaic()
 
-        def call_advanced(self):
-            MosaicAdvanced()
+        def call_mosaic_settings(self):
+            """ Creates instance of MosaicSettings class """
+            self.mosaic_settings_obj = MosaicSettings()
     
-        def lol(self):
-
-            for child in mosaic_window.winfo_children(): child.destroy()
+        def plot_mosaic(self):
+            """ Plot the Selectable Mosaic """
+            for child in mosaic_window.winfo_children(): child.destroy() # this allows for mosaic redraw when settings are changed
             # create the canvas with size according to input tile size
             canvas = Canvas(mosaic_window, width = tile_size*(max((image_data[:,8:9]).astype(int))[0]+1), 
                             height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
         
-            button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_advanced)
+            button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_mosaic_settings)
         
             # iterate through all rows of image data, plot each tile on the canvas
             self.images = []
             for idx, img_row in enumerate(image_data):
                 image = Image.open(image_origin + img_row[2]) 
-                image = image.resize((tile_size,tile_size),Image.LANCZOS) # resize tile and interpolate
+                image = image.resize((tile_size,tile_size),Image.BILINEAR) # resize tile and interpolate
                 self.images.append(ImageTk.PhotoImage(image))
                 canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=self.images[idx]) 
         
@@ -508,43 +655,51 @@ def defect_viewer(self):
                 x = float(def_row[13]) * (tile_size / float((image_data[row_index,9])[0])) # scale defect coords according to image scale
                 y = float(def_row[14]) * (tile_size / float((image_data[row_index,10])[0]))
                 scale = 20
-                canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, outline = self.outline, fill = "red")
+                bin_range_index = np.searchsorted(self.binning_ranges, float(def_row[8])) # get index corresponding to binning range of defect area
+                # set defect mark color based on binning color corresponding to index found above
+                if (bin_range_index > (len(self.binning_ranges) - 1)) or (self.binning_ranges.size == 0):
+                    mark_color = self.inf_bin_color
+                else:
+                    mark_color = self.binning_colors[bin_range_index]
+                # now plot the defect on the mosaic
+                canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, 
+                                   outline = mark_color, fill = mark_color)
             
             canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
             
             canvas.pack()
             button_advanced.pack()
 
-    newlol = LOL()
+    # create object of MosaicCreator
+    mosaic_obj = MosaicCreator()
     mosaic_window.mainloop()
 
-class AdvancedSettings:
-    """ Advanced Settings Class """ 
+class RootSettings:
+    """ Advanced Settings Class for Root Window """ 
     def __init__(self):
-        self.initial_panel()
+        self.initial_panel_root()
 
-    def initial_panel(self):
-        """ Create initial advanced settings panel """     
+    def initial_panel_root(self):
+        """ Create initial advanced settings panel from the Root window """     
         self.adv_window = tk.Toplevel()
         self.adv_window.title('Advanced Settings')
 
-        self.font_size_input_adv = tk.StringVar(self.adv_window, value='6')
-        tk.Label(self.adv_window, text='Defect Label Font Size').grid(row=0, column = 0, columnspan = 1)
-        self.e1 = tk.Entry(self.adv_window, textvariable = self.font_size_input_adv, width = 5)
-        self.e1.grid(row = 0, column = 1, columnspan = 2)
+        # self.font_size_input_adv = tk.StringVar(self.adv_window, value='6')
+        # tk.Label(self.adv_window, text='Defect Label Font Size').grid(row=0, column = 0, columnspan = 1)
+        # self.e1 = tk.Entry(self.adv_window, textvariable = self.font_size_input_adv, width = 5)
+        # self.e1.grid(row = 0, column = 1, columnspan = 2)
 
-        button_accept = tk.Button(self.adv_window, text='Accept', width = 10,  
-                                command = lambda arg = self.font_size_input_adv: self.return_choices(arg))
+        tk.Label(self.adv_window, text='No settings here yet').grid(row=0, column = 0, columnspan = 1)
+
+        button_accept = tk.Button(self.adv_window, text='Accept', width = 10, command = self.return_choices_root)
         button_accept.grid(row = 1, column = 3)
 
         button_close = tk.Button(self.adv_window, text='Close', width = 10, command=self.adv_window.destroy)
         button_close.grid(row = 2, column = 3)
         
-    def return_choices(self, arg):
+    def return_choices_root(self):
         """ Sends input settings back to Root """     
-        root_obj.font_size_input = arg
-        #Root.font_size_input = arg
-        #Root.set_parameters(self, arg)
+        pass
 
 class Root:
     """ Class to create initial Root gui window """
@@ -554,11 +709,11 @@ class Root:
         self.root.title('Defect View')
 
         # create variables for input in Root gui
-        self.img_loc_var = tk.StringVar()
-        self.db_file_var = tk.StringVar()
-        self.scan_id_var = tk.StringVar()
-        self.ana_id_var = tk.StringVar()
-        self.tile_size_var = tk.StringVar()
+        self.img_loc_var = tk.StringVar() # path to images
+        self.db_file_var = tk.StringVar() # path to database file
+        self.scan_id_var = tk.StringVar() # Scan ID
+        self.ana_id_var = tk.StringVar() # Analysis ID
+        self.tile_size_var = tk.StringVar() # Desired size of tiles in mosaic
 
         # initialize advanced settings variables to default values
         # will be overwritten by user input if desired
@@ -602,7 +757,7 @@ class Root:
 
     def advanced_settings(self):
         """ Creates instance of advanced settings class """  
-        AdvancedSettings()
+        self.root_settings_obj = RootSettings()
         
     def browse_file(self):
         """ Opens file explorer for file selection """       
@@ -616,11 +771,6 @@ class Root:
         self.e1.delete(0, 'end')
         self.e1.insert(tk.END, directory_name)
 
-    #def set_parameters(self, arg):
-    #    self.font_size_input = arg
-
 if __name__ == "__main__": 
     root_obj = Root()
     root_obj.root.mainloop()
-    #Root()
-    #mainloop()
