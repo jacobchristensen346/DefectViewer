@@ -11,6 +11,9 @@
 # I also applied the binning colors/ranges to the defect marks within the selected tile!
 # updated some things related to placement of tkinter objects (buttons, entries, labels, etc.)
 
+# in this version I separate the mosaic image plotting and defect mark plotting on the mosaic into two separate functions
+# now you won't need to replot the whole mosaic each time something related to the defect marks are changed
+
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
 from tkinter import ttk
@@ -21,6 +24,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from PIL import Image, ImageTk
+from io import BytesIO
+import cv2
 
 import sqlite3
 
@@ -28,6 +33,9 @@ import os
 import argparse
 import shutil
 import warnings
+import time
+
+Image.MAX_IMAGE_PIXELS = None
     
 def defect_viewer(self):
     """Contains all the functionality of the app
@@ -614,7 +622,7 @@ def defect_viewer(self):
             mosaic_obj.inf_bin_color = self.inf_bin_color
             
             # re-plot the mosaic with the new settings
-            mosaic_obj.plot_mosaic()
+            mosaic_obj.plot_defects()
 
     class MosaicCreator:
         """ Create Mosaic With Selectable Tiles """
@@ -631,24 +639,10 @@ def defect_viewer(self):
         def call_mosaic_settings(self):
             """ Creates instance of MosaicSettings class """
             self.mosaic_settings_obj = MosaicSettings()
-    
-        def plot_mosaic(self):
-            """ Plot the Selectable Mosaic """
-            for child in mosaic_window.winfo_children(): child.destroy() # this allows for mosaic redraw when settings are changed
-            # create the canvas with size according to input tile size
-            canvas = Canvas(mosaic_window, width = tile_size*(max((image_data[:,8:9]).astype(int))[0]+1), 
-                            height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
-        
-            button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_mosaic_settings)
-        
-            # iterate through all rows of image data, plot each tile on the canvas
-            self.images = []
-            for idx, img_row in enumerate(image_data):
-                image = Image.open(image_origin + img_row[2]) 
-                image = image.resize((tile_size,tile_size),Image.BILINEAR) # resize tile and interpolate
-                self.images.append(ImageTk.PhotoImage(image))
-                canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=self.images[idx]) 
-        
+
+        def plot_defects(self):
+            """ Plot the defects onto the mosaic created by plot_mosaic function """
+            self.canvas.delete("DEFECT_MARK") # deletes all current defect marks to allow for re-plotting
             # iterate through all rows of defect data, plot each defect on the canvas
             for idx, def_row in enumerate(defect_data):
                 row_index = np.where(np.any(image_data[:,0:1].astype(float) == float(def_row[1]), axis=1))[0] # find the tile where defect resides
@@ -662,12 +656,39 @@ def defect_viewer(self):
                 else:
                     mark_color = self.binning_colors[bin_range_index]
                 # now plot the defect on the mosaic
-                canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, 
-                                   outline = mark_color, fill = mark_color)
+                self.canvas.create_oval(x-tile_size/scale, y-tile_size/scale, x + tile_size/scale, y + tile_size/scale, 
+                                   outline = mark_color, fill = mark_color, tags = "DEFECT_MARK")
+
+        def plot_mosaic(self):
+            """ Plot the images onto a selectable mosaic """
+            # create the canvas with size according to input tile size
+            self.canvas = Canvas(mosaic_window, width = tile_size*(max((image_data[:,8:9]).astype(int))[0]+1), 
+                            height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
+        
+            button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_mosaic_settings)
+        
+            # iterate through all rows of image data, plot each tile on the canvas
+            self.images = []
+            for idx, img_row in enumerate(image_data):
+                image = Image.open(image_origin + img_row[2]) 
+                image = image.resize((tile_size,tile_size),Image.NEAREST) # resize tile and interpolate
+                self.images.append(ImageTk.PhotoImage(image))
+
+                # optional opencv version of image processing
+                #start_time = time.perf_counter()
+                #image = cv2.imread(image_origin + img_row[2])
+                #image = cv2.resize(image, (tile_size,tile_size), interpolation = cv2.INTER_NEAREST)
+                #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                #self.images.append(ImageTk.PhotoImage(image=Image.fromarray(image)))
+                #end_time = time.perf_counter()
+                #print(end_time - start_time)
+                self.canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=self.images[idx], tags = "IMAGE_TILE")
+
+            self.plot_defects() # function that plots the defects onto the canvas created above
+
+            self.canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
             
-            canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
-            
-            canvas.pack()
+            self.canvas.pack()
             button_advanced.pack()
 
     # create object of MosaicCreator
