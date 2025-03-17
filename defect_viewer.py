@@ -14,6 +14,13 @@
 # in this version I separate the mosaic image plotting and defect mark plotting on the mosaic into two separate functions
 # now you won't need to replot the whole mosaic each time something related to the defect marks are changed
 
+# I have added a progress tracker label to the root window which shows the progress of loading images
+
+# In this version I add explicit initialization of instance variables into the initialization functions of the classes
+
+# I created a new function (__poly_oval_v2) which transforms oval coordinates to polygon coordinates, allowing for rotation
+# of the defect oval marks since tkinter doesn't allow rotation of its oval objects
+
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
 from tkinter import ttk
@@ -36,6 +43,13 @@ import warnings
 import time
 
 Image.MAX_IMAGE_PIXELS = None
+
+""" 
+This script is used to plot images and analysis results measured by the Nanotronics nSpec tool 
+The user inputs directories to the scanned images and the database file containing analysis information
+Images are output in a mosaic with defects overlaid
+
+"""
     
 def defect_viewer(self):
     """Contains all the functionality of the app
@@ -48,7 +62,7 @@ def defect_viewer(self):
  
     def clicked(self, event, image_data, defect_data):
         """ Contains all functionality to support click event
-            Is called upon click event """
+            This function is called upon click event """
         print(event)
 
         # variables passed from the instance of MosaicCreator
@@ -82,6 +96,9 @@ def defect_viewer(self):
                     """ Display and zoom image """
                     def __init__(self, placeholder, path):
                         """ Initialize the ImageFrame """
+                        self.start_x = None # coordinates which aid in the class functions for drawing areas
+                        self.start_y = None
+                        self.__new_font_size = None # initialize shared variable for adjusting font sizes upon zoom
                         self.imscale = 1.0  # scale for the canvas image zoom, public for outer classes
                         self.__delta = 1.3  # zoom magnitude
                         self.__filter = Image.LANCZOS  # could be: NEAREST, BILINEAR, BICUBIC and ANTIALIAS
@@ -217,6 +234,75 @@ def defect_viewer(self):
                         """ Scroll canvas vertically and redraw the image """
                         self.canvas.yview(*args)  # scroll vertically
                         self.__show_image()  # redraw the image
+                        
+                    def __poly_oval(self, x0, y0, x1, y1, steps=40, rotation=0):
+                        """ OLD VERSION (uses loops): Return an oval as coordinates suitable for create_polygon """
+
+                        # x0,y0,x1,y1 are as create_oval
+
+                        # rotation is in degrees anti-clockwise, convert to radians
+                        rotation = rotation * np.pi / 180.0
+
+                        # major and minor axes
+                        a = (x1 - x0) / 2.0
+                        b = (y1 - y0) / 2.0
+
+                        # center
+                        xc = x0 + a
+                        yc = y0 + b
+
+                        point_list = []
+
+                        # create the oval as a list of points
+                        for i in range(steps):
+
+                            # Calculate the angle for this step
+                            # 360 degrees == 2 pi radians
+                            theta = (math.pi * 2) * (float(i) / steps)
+
+                            x1 = a * math.cos(theta)
+                            y1 = b * math.sin(theta)
+
+                            # rotate x, y
+                            x = (x1 * math.cos(rotation)) + (y1 * math.sin(rotation))
+                            y = (y1 * math.cos(rotation)) - (x1 * math.sin(rotation))
+
+                            point_list.append(round(x + xc))
+                            point_list.append(round(y + yc))
+
+                        return point_list
+                    
+                    def __poly_oval_v2(self, x0, y0, x1, y1, steps=50, rotation=0):
+                        """ NEW VERSION (uses numpy): Return an oval as coordinates suitable for create_polygon """
+
+                        # x0,y0,x1,y1 are as create_oval
+
+                        # rotation is in degrees anti-clockwise, convert to radians
+                        rotation = rotation * np.pi / 180.0
+
+                        # major and minor axes
+                        a = (x1 - x0) / 2.0
+                        b = (y1 - y0) / 2.0
+
+                        # center
+                        xc = x0 + a
+                        yc = y0 + b
+                        
+                        # create an oval as a list of points...
+                        
+                        # Calculate the angle for all steps
+                        # 360 degrees == 2 pi radians
+                        theta = (np.pi * 2) * (np.arange(steps) / steps)
+                        x1 = a * np.cos(theta)
+                        y1 = b * np.sin(theta)
+                        
+                        # rotate x, y
+                        x = (x1 * np.cos(rotation)) + (y1 * np.sin(rotation)) + xc
+                        y = (y1 * np.cos(rotation)) - (x1 * np.sin(rotation)) + yc
+                        
+                        point_list = (np.column_stack([x,y])).flatten()
+                        
+                        return point_list
 
                     def __show_defects(self):
                         """ Plots defects on selected image """
@@ -234,8 +320,17 @@ def defect_viewer(self):
                                         bin_outline_color = defect_inf_bin_color
                                     else:
                                         bin_outline_color = defect_binning_colors[bin_range_index]
-                                    self.canvas.create_oval(x-box_image[2]/scale, y-box_image[3]/scale, x + box_image[2]/scale, y + box_image[3]/scale, 
-                                                            outline = bin_outline_color, fill = "", width = 1)
+                                    #self.canvas.create_oval(x-float(def_row[6])/2, y-float(def_row[7])/2, 
+                                    #                        x + float(def_row[6])/2, y + float(def_row[7])/2, 
+                                    #                        outline = bin_outline_color, fill = "", width = 2)
+                                    # ovals cannot be rotated in tkinter
+                                    # convert oval coordinates to polygon and add in rotation defined by "Orientation" from database file
+                                    x0 = x - float(def_row[6])/2
+                                    y0 = y - float(def_row[7])/2
+                                    x1 = x + float(def_row[6])/2
+                                    y1 = y + float(def_row[7])/2
+                                    self.canvas.create_polygon(tuple(self.__poly_oval_v2(x0, y0, x1, y1, 
+                                                rotation = float(def_row[12]))), outline = bin_outline_color, fill = "", width = 2)
 
                     def __show_labels(self):
                         """ Plots defect labels on selected image """
@@ -301,10 +396,12 @@ def defect_viewer(self):
                             self.canvas.imagetk = imagetk  # keep an extra reference to prevent garbage-collection
                     
                     def __on_right_click(self, event):
+                        """ Initializes the area measurement upon click """
                         self.start_x = self.canvas.canvasx(event.x)
                         self.start_y = self.canvas.canvasy(event.y)
                     
                     def __on_right_click_drag(self, event):
+                        """ Allows for area measurement size modification through mouse drag """
                         if self.start_x is not None and self.start_y is not None:
                             self.canvas.delete("temp_circle")
                             radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
@@ -314,6 +411,7 @@ def defect_viewer(self):
                                                     outline='black', tags="temp_circle")
                     
                     def __on_right_click_release(self, event):
+                        """ Finalizes area measurement upon release of mouse click """
                         if self.start_x is not None and self.start_y is not None:
                             self.canvas.delete("temp_circle")
                             radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
@@ -321,10 +419,19 @@ def defect_viewer(self):
                                                     self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
                                                     self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
                                                     outline='black', tags="final_area_circle")
+                            # create area label, which uses the same font size as defect labels for now
+                            # check if new font size applied due to zoom, if not apply default font size
+                            if self.__new_font_size == None:
+                                area_font_size = label_font_size
+                            else:
+                                area_font_size = self.__new_font_size
+                            self.canvas.create_text(self.start_x - radius, self.start_y - radius, text=("Area = " + str(np.pi*radius**2)), 
+                                                        font=("Arial", -area_font_size), tags = ("text", "final_area_circle"))
                             self.start_x = None
                             self.start_y = None
 
                     def __destroy_circles(self, event):
+                        """ Removes any area measurement markers on the canvas """
                         for item in self.canvas.find_withtag("final_area_circle"):
                             self.canvas.delete(item)
                 
@@ -377,17 +484,16 @@ def defect_viewer(self):
                         # if the indicator is smaller (scale is dec), dec font size
                         # built-in protection against decreasing font size to zero
                         if rounding_indicator < label_font_size and rounding_indicator >= 1:
-                            new_font_size = math.floor(rounding_indicator)
+                            self.__new_font_size = math.floor(rounding_indicator)
                         else:
-                            new_font_size = math.ceil(rounding_indicator)
-                        #print(label_font_size, rounding_indicator)
+                            self.__new_font_size = math.ceil(rounding_indicator)
                         # once font size of 1 is reached, we need to make sure to keep track of scaling trends as we continue to demagnify image
                         # if not, we will scale the font size too quickly while magnifying the image
                         # the line of code below accomplishes the tracking by essentially recording the current number of scaling events
                         label_font_size = rounding_indicator 
                         # find all text objects according to "text" tag assigned to defect labels
                         for child_widget in self.canvas.find_withtag("text"):
-                            self.canvas.itemconfigure(child_widget, font=("Arial", -new_font_size))
+                            self.canvas.itemconfigure(child_widget, font=("Arial", -self.__new_font_size))
                         # Redraw some figures before showing image on the screen
                         self.redraw_figures()  # method for child classes
                         self.__show_image()
@@ -473,7 +579,16 @@ def defect_viewer(self):
 
     class DefectBinning:
         """ Defect Binning Class """
-        def __init__(self):
+        def __init__(self):       
+            # instance variable initialization
+            self.defect_binning_window = None
+            self.row_num = None
+            self.list_of_entry_fields = None
+            self.button_set_binning = None
+            self.button_close = None
+            self.inf_bin_color = None
+            
+            # call for initial panel creation
             self.main_binning_window()
             
         def main_binning_window(self):
@@ -571,6 +686,13 @@ def defect_viewer(self):
             self.binning_ranges = mosaic_obj.binning_ranges # the desired binning ranges given in um^2
             self.binning_colors = mosaic_obj.binning_colors # the desired binning colors
             self.inf_bin_color = mosaic_obj.inf_bin_color # the desired infinity bin color
+            
+            # instance variable initialization
+            self.mosaic_settings_window = None
+            self.font_size_defect_label = None
+            self.defect_binning_obj = None
+            
+            # call function to create initial settings panel
             self.main_mosaic_settings()
 
         def main_mosaic_settings(self):
@@ -579,23 +701,11 @@ def defect_viewer(self):
             self.mosaic_settings_window = tk.Toplevel()
             self.mosaic_settings_window.title('Mosaic Advanced Settings')
 
-            # # color of defect mark outline
-            # self.mark_outline = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.mark_outline)
-            # tk.Label(self.mosaic_settings_window, text='Defect Mark Outline').grid(row=0, column = 0, columnspan = 1)
-            # self.entry_mark_outline = tk.Entry(self.mosaic_settings_window, textvariable = self.mark_outline, width = 5)
-            # self.entry_mark_outline.grid(row = 0, column = 1, columnspan = 2)
-
-            # # color of defect mark fill
-            # self.mark_fill = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.mark_fill)
-            # tk.Label(self.mosaic_settings_window, text='Defect Mark Fill').grid(row=1, column = 0, columnspan = 1)
-            # self.entry_mark_fill = tk.Entry(self.mosaic_settings_window, textvariable = self.mark_fill, width = 5)
-            # self.entry_mark_fill.grid(row = 1, column = 1, columnspan = 2)
-
             # font size of defect label text
             self.font_size_defect_label = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.font_size_defect_label)
             tk.Label(self.mosaic_settings_window, text='Defect Label Font Size').grid(row=1, column = 0, columnspan = 2)
-            self.entry_font_size_defect_label = tk.Entry(self.mosaic_settings_window, textvariable = self.font_size_defect_label, width = 5)
-            self.entry_font_size_defect_label.grid(row = 1, column = 2, columnspan = 2)
+            entry_font_size_defect_label = tk.Entry(self.mosaic_settings_window, textvariable = self.font_size_defect_label, width = 5)
+            entry_font_size_defect_label.grid(row = 1, column = 2, columnspan = 2)
 
             # button to open defect binning window
             button_defect_binning = tk.Button(self.mosaic_settings_window, text='Binning', width = 10, command = self.call_defect_binning)
@@ -628,12 +738,16 @@ def defect_viewer(self):
         """ Create Mosaic With Selectable Tiles """
         def __init__(self):
             # initialize variables to default values, may be overwritten by advanced mosaic settings
-            #self.mark_outline = "red"
-            #self.mark_fill = "red"
             self.font_size_defect_label = "6"
             self.binning_ranges = np.array([]) # the desired binning ranges and colors are passed from DefectBinning to MosaicSettings to MosaicCreator
             self.binning_colors = np.array([]) 
             self.inf_bin_color = 'red'
+            
+            # instance variable initialization
+            self.canvas = None
+            self.images = None
+            
+            # call image plotting function upon class object creation
             self.plot_mosaic()
 
         def call_mosaic_settings(self):
@@ -666,7 +780,12 @@ def defect_viewer(self):
                             height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
         
             button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_mosaic_settings)
-        
+
+            # create new label in root window which tracks image loading progress
+            tk.Label(root_obj.root, text='Loading...').grid(row=6, column = 2, columnspan = 2)
+            load_progress = tk.Label(root_obj.root, text='0/' + str(len(image_data)))
+            load_progress.grid(row = 6, column = 3, columnspan = 2)
+            root_obj.root.update()
             # iterate through all rows of image data, plot each tile on the canvas
             self.images = []
             for idx, img_row in enumerate(image_data):
@@ -683,7 +802,12 @@ def defect_viewer(self):
                 #end_time = time.perf_counter()
                 #print(end_time - start_time)
                 self.canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=self.images[idx], tags = "IMAGE_TILE")
-
+                load_progress.config(text = str(idx) + '/' + str(len(image_data))) # update load progress label in root
+                root_obj.root.update() # update root window
+                self.canvas.pack() # this shows the images being actively loaded into the canvas
+            
+            load_progress.config(text = 'Done!')
+                
             self.plot_defects() # function that plots the defects onto the canvas created above
 
             self.canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
@@ -698,17 +822,17 @@ def defect_viewer(self):
 class RootSettings:
     """ Advanced Settings Class for Root Window """ 
     def __init__(self):
+        
+        # instance variable initialization
+        self.adv_window = None
+        
+        # call initial panel function
         self.initial_panel_root()
 
     def initial_panel_root(self):
-        """ Create initial advanced settings panel from the Root window """     
+        """ Create initial advanced settings panel from the Root window """   
         self.adv_window = tk.Toplevel()
         self.adv_window.title('Advanced Settings')
-
-        # self.font_size_input_adv = tk.StringVar(self.adv_window, value='6')
-        # tk.Label(self.adv_window, text='Defect Label Font Size').grid(row=0, column = 0, columnspan = 1)
-        # self.e1 = tk.Entry(self.adv_window, textvariable = self.font_size_input_adv, width = 5)
-        # self.e1.grid(row = 0, column = 1, columnspan = 2)
 
         tk.Label(self.adv_window, text='No settings here yet').grid(row=0, column = 0, columnspan = 1)
 
@@ -726,6 +850,27 @@ class Root:
     """ Class to create initial Root gui window """
     def __init__(self):
         
+        # instance variable initialization
+        self.root = None
+        self.img_loc_var = None
+        self.db_file_var = None
+        self.scan_id_var = None
+        self.ana_id_var = None
+        self.tile_size_var = None
+        self.root_settings_obj = None
+        self.e1 = None
+        self.e2 = None
+        self.e3 = None
+        self.e4 = None
+        self.e5 = None
+        self.font_size_input = None
+        
+        # call function to create main panel
+        self.main_root_window()
+        
+    def main_root_window(self):
+        """ Create the main root panel """
+        
         self.root = tk.Tk()
         self.root.title('Defect View')
 
@@ -735,7 +880,7 @@ class Root:
         self.scan_id_var = tk.StringVar() # Scan ID
         self.ana_id_var = tk.StringVar() # Analysis ID
         self.tile_size_var = tk.StringVar() # Desired size of tiles in mosaic
-
+        
         # initialize advanced settings variables to default values
         # will be overwritten by user input if desired
         self.font_size_input = tk.StringVar(self.root, value = '6')
