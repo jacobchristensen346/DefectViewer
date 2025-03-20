@@ -1,25 +1,10 @@
-# In this version I have added in a defect binning advanced settings window
-# The values are successfully transfered into the click function
-# Now I need to spend some time figuring out how to get the settings to save when opening and closing the settings
-# Right now the settings for binning reset when I open the settings back up
-# Also I need to make it so that the binning settings are used in the clicked window, right now they are only passed, not implemented
+# in this version I move the MosaicCreator window into its corresponding class
+# I add in a new window in MosaicSettings which allows for selection of defect text output
+# I made adjustments to the defect label plotting function within the zoomable tile to account for user input for which defect info to display on the text line
 
-# I addressed the issue of binning not being auto populated by previous choices upon closing and opening the settings window
-# now binning settings are passed through the heirarchal chain of class objects so the settings are saved at each level and retrievable
-
-# I have now applied the binning colors/ranges to the mosaic!
-# I also applied the binning colors/ranges to the defect marks within the selected tile!
-# updated some things related to placement of tkinter objects (buttons, entries, labels, etc.)
-
-# in this version I separate the mosaic image plotting and defect mark plotting on the mosaic into two separate functions
-# now you won't need to replot the whole mosaic each time something related to the defect marks are changed
-
-# I have added a progress tracker label to the root window which shows the progress of loading images
-
-# In this version I add explicit initialization of instance variables into the initialization functions of the classes
-
-# I created a new function (__poly_oval_v2) which transforms oval coordinates to polygon coordinates, allowing for rotation
-# of the defect oval marks since tkinter doesn't allow rotation of its oval objects
+# Now you can choose between a circle and a line to draw
+# The zoomable tile window has a couple buttons added to toggle between the two kinds of measurements
+# Added new algorithms and variables to the mouse click functions to support the line measurement capability
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -60,7 +45,7 @@ def defect_viewer(self):
     analysis_id = self.ana_id_var.get()
     tile_size = int(self.tile_size_var.get())        
  
-    def clicked(self, event, image_data, defect_data):
+    def clicked(self, event):
         """ Contains all functionality to support click event
             This function is called upon click event """
         print(event)
@@ -71,6 +56,8 @@ def defect_viewer(self):
         defect_binning_colors = self.binning_colors # binning colors for defects
         defect_inf_bin_color = self.inf_bin_color # color for the defect bin which goes to infinity
         label_font_size = int(self.font_size_defect_label) # font size for defect labels
+        defect_data = self.defect_data # array containing all relevant defect data
+        image_data = self.image_data # array containing all relevant image data
         
         # iterate through all image data rows, find selected image according to click event, image coords, and tile size
         for idx, img_row in enumerate(image_data):
@@ -96,6 +83,7 @@ def defect_viewer(self):
                     """ Display and zoom image """
                     def __init__(self, placeholder, path):
                         """ Initialize the ImageFrame """
+                        self.measure_choice = None
                         self.start_x = None # coordinates which aid in the class functions for drawing areas
                         self.start_y = None
                         self.__new_font_size = None # initialize shared variable for adjusting font sizes upon zoom
@@ -120,15 +108,15 @@ def defect_viewer(self):
                         vbar.configure(command=self.__scroll_y)
                         # Bind events to the Canvas
                         self.canvas.bind('<Configure>', lambda event: self.__show_image())  # canvas is resized
-                        self.canvas.bind("<Return>", self.__destroy_circles) # remove all ellipse area measurements
+                        self.canvas.bind("<Return>", self.__destroy_measure_markers) # remove all measurement marks placed by user
                         self.canvas.bind('<ButtonPress-1>', self.__move_from)  # remember canvas position
                         self.canvas.bind('<B1-Motion>',     self.__move_to)  # move canvas to the new position
                         self.canvas.bind('<MouseWheel>', self.__wheel)  # zoom for Windows and MacOS, but not Linux
                         self.canvas.bind('<Button-5>',   self.__wheel)  # zoom for Linux, wheel scroll down
                         self.canvas.bind('<Button-4>',   self.__wheel)  # zoom for Linux, wheel scroll up
-                        self.canvas.bind("<ButtonPress-3>", self.__on_right_click) # initiate ellipse area measurement
-                        self.canvas.bind("<B3-Motion>", self.__on_right_click_drag) # enable dragging for drawing ellipse
-                        self.canvas.bind("<ButtonRelease-3>", self.__on_right_click_release) # finalize ellipse area measurement
+                        self.canvas.bind("<ButtonPress-3>", self.__on_right_click) # initiate user measurement
+                        self.canvas.bind("<B3-Motion>", self.__on_right_click_drag) # enable dragging for drawing measurement mark
+                        self.canvas.bind("<ButtonRelease-3>", self.__on_right_click_release) # finalize measurement mark
                         # Handle keystrokes in idle mode, because program slows down on a weak computers,
                         # when too many key stroke events in the same time
                         self.canvas.bind('<Key>', lambda event: self.canvas.after_idle(self.__keystroke, event))
@@ -139,7 +127,7 @@ def defect_viewer(self):
                         Image.MAX_IMAGE_PIXELS = 1000000000  # suppress DecompressionBombError for the big image
                         with warnings.catch_warnings():  # suppress DecompressionBombWarning
                             warnings.simplefilter('ignore')
-                            self.__image = Image.open(self.path)  # open image, but down't load it
+                            self.__image = Image.open(self.path)  # open image, but don't load it
                         self.imwidth, self.imheight = self.__image.size  # public for outer classes
                         if self.imwidth * self.imheight > self.__huge_size * self.__huge_size and \
                            self.__image.tile[0][0] == 'raw':  # only raw images could be tiled
@@ -165,6 +153,7 @@ def defect_viewer(self):
                         # Put image into container rectangle and use it to set proper coordinates to the image
                         self.container = self.canvas.create_rectangle((0, 0, self.imwidth, self.imheight), width=0)
                         self.__show_image()  # show image on the canvas
+                        self.__create_option_buttons() # create the option buttons next to the canvas
                         self.__show_defects()  # show defects on the canvas
                         self.__show_labels() # show defect labels on the canvas
                         self.canvas.focus_set()  # set focus on the canvas
@@ -277,8 +266,9 @@ def defect_viewer(self):
 
                         # x0,y0,x1,y1 are as create_oval
 
-                        # rotation is in degrees anti-clockwise, convert to radians
-                        rotation = rotation * np.pi / 180.0
+                        # rotation is in degrees, convert to radians
+                        # the added negative ensures clockwise rotation
+                        rotation = - rotation * np.pi / 180.0
 
                         # major and minor axes
                         a = (x1 - x0) / 2.0
@@ -312,7 +302,7 @@ def defect_viewer(self):
                         for idx, def_row in enumerate(defect_data):
                                 if float(def_row[1]) == float(img_row[0]):
                                     x = float(def_row[4])*box_image[2]/float(img_row[9]) # coordinates of defect scaled by image size
-                                    y = float(def_row[5])*box_image[3]/float(img_row[10])
+                                    y = float(def_row[5])*box_image[3]/float(img_row[10]) # also converted to image pixels from microns
                                     scale = 30
                                     bin_range_index = np.searchsorted(defect_binning_ranges, float(def_row[8])) # get index corresponding to binning range of defect area
                                     # set defect mark color based on binning color corresponding to index found above
@@ -325,10 +315,11 @@ def defect_viewer(self):
                                     #                        outline = bin_outline_color, fill = "", width = 2)
                                     # ovals cannot be rotated in tkinter
                                     # convert oval coordinates to polygon and add in rotation defined by "Orientation" from database file
-                                    x0 = x - float(def_row[6])/2
-                                    y0 = y - float(def_row[7])/2
-                                    x1 = x + float(def_row[6])/2
-                                    y1 = y + float(def_row[7])/2
+                                    # the factor of 2 multiplied on here ensures the oval encircles the entire defect 
+                                    x0 = x - (float(def_row[6])*2)/2
+                                    y0 = y - (float(def_row[7])*2)/2
+                                    x1 = x + (float(def_row[6])*2)/2
+                                    y1 = y + (float(def_row[7])*2)/2
                                     self.canvas.create_polygon(tuple(self.__poly_oval_v2(x0, y0, x1, y1, 
                                                 rotation = float(def_row[12]))), outline = bin_outline_color, fill = "", width = 2)
 
@@ -340,13 +331,23 @@ def defect_viewer(self):
                         for idx, def_row in enumerate(defect_data):
                                 if float(def_row[1]) == float(img_row[0]):
                                     x = float(def_row[4])*box_image[2]/float(img_row[9]) # coordinates of defect label scaled by image size
-                                    y = float(def_row[5])*box_image[3]/float(img_row[10])
+                                    y = float(def_row[5])*box_image[3]/float(img_row[10]) # also converted to image pixels from microns
                                     scale = 60
                                     #font_size = -int(10*((box_image[2]*box_image[3])/(self.imheight*self.imwidth)))
+                                    # this array contains all defect info that can be output on the defect label text line
+                                    defect_all_info = np.array(["DefectID = " + def_row[0], "ImageID = " + def_row[1], "AnalysisID = " + def_row[2],
+                                                                "DeviceID = " + def_row[3], "X = " + def_row[4], "Y = " + def_row[5],
+                                                                "W = " + def_row[6], "H = " + def_row[7], "Area = " + def_row[8],
+                                                                "Intensity = " + def_row[9], "IntensityDeviation = " + def_row[10],
+                                                                "Eccentricity = " + def_row[11], "Orientation = " + def_row[12],
+                                                                "XinDevice = " + def_row[13], "YinDevice = " + def_row[14], "ClassID = " + def_row[15],
+                                                                "Score = " + def_row[16], "Contour = " + def_row[17]])
+                                    defect_select_info = defect_all_info[mosaic_obj.defect_label_text_choices] # filter info array to user selections
+                                    #defect_select_info = defect_select_info[defect_select_info != 0] # remove zero values
+                                    defect_label_text = ", ".join(defect_select_info) # combine all elements into one string
                                     self.canvas.create_text(x-box_image[2]/scale, y-box_image[3]/scale, 
-                                                                                text = "X = " + def_row[4] + ", Y = " + def_row[5], 
-                                                                                font=("Arial", -label_font_size), tags = "text")
-                
+                                                            text = defect_label_text, font=("Arial", -label_font_size), tags = "text")
+
                     def __show_image(self):
                         """ Show image on the Canvas """
                         box_image = self.canvas.coords(self.container)  # get image area
@@ -394,45 +395,93 @@ def defect_viewer(self):
 
                             self.canvas.lower(imageid)  # set image into background
                             self.canvas.imagetk = imagetk  # keep an extra reference to prevent garbage-collection
+                            
+                    def __create_option_buttons(self):
+                        """ Create option buttons off to the side of the canvas """
+                        tk.Label(self.__imframe, text='Measurement Tool').grid(row=1, column = 1, columnspan = 1)
+                        button_select_circle = tk.Button(self.__imframe, text='Circle', width = 10, 
+                                                         command = lambda arg = "Circle": self.__set_measure_choice(arg))
+                        button_select_circle.grid(row=2, column=1, sticky='nswe')
+
+                        button_select_line = tk.Button(self.__imframe, text='Line', width = 10, 
+                                                       command = lambda arg = "Line": self.__set_measure_choice(arg))
+                        button_select_line.grid(row=3, column=1, sticky='nswe')
+                    
+                    def __set_measure_choice(self, arg):
+                        """ Set which kind of object to draw with the measuring tool """
+                        self.measure_choice = arg
                     
                     def __on_right_click(self, event):
-                        """ Initializes the area measurement upon click """
+                        """ Initializes the measurement upon click """
                         self.start_x = self.canvas.canvasx(event.x)
                         self.start_y = self.canvas.canvasy(event.y)
                     
                     def __on_right_click_drag(self, event):
-                        """ Allows for area measurement size modification through mouse drag """
-                        if self.start_x is not None and self.start_y is not None:
-                            self.canvas.delete("temp_circle")
-                            radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
-                            self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
-                                                    self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
-                                                    self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
-                                                    outline='black', tags="temp_circle")
+                        """ Allows for measurement size modification through mouse drag """
+                        if self.measure_choice == "Circle":
+                            if self.start_x is not None and self.start_y is not None:
+                                self.canvas.delete("temp_circle")
+                                radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                                self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
+                                                        self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
+                                                        self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
+                                                        outline='red', tags="temp_circle")
+                                
+                        elif self.measure_choice == "Line":
+                            if self.start_x is not None and self.start_y is not None:
+                                self.canvas.delete("temp_line")
+                                length = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                                self.canvas.create_line(self.start_x, self.start_y, self.canvas.canvasx(event.x), self.canvas.canvasy(event.y),
+                                                        fill='red', width = 2, tags="temp_line")
                     
                     def __on_right_click_release(self, event):
-                        """ Finalizes area measurement upon release of mouse click """
-                        if self.start_x is not None and self.start_y is not None:
-                            self.canvas.delete("temp_circle")
-                            radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
-                            self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
-                                                    self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
-                                                    self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
-                                                    outline='black', tags="final_area_circle")
-                            # create area label, which uses the same font size as defect labels for now
-                            # check if new font size applied due to zoom, if not apply default font size
-                            if self.__new_font_size == None:
-                                area_font_size = label_font_size
-                            else:
-                                area_font_size = self.__new_font_size
-                            self.canvas.create_text(self.start_x - radius, self.start_y - radius, text=("Area = " + str(np.pi*radius**2)), 
-                                                        font=("Arial", -area_font_size), tags = ("text", "final_area_circle"))
-                            self.start_x = None
-                            self.start_y = None
+                        """ Finalizes measurement upon release of mouse click """
+                        if self.measure_choice == "Circle":
+                            if self.start_x is not None and self.start_y is not None:
+                                self.canvas.delete("temp_circle")
+                                radius = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                                self.canvas.create_oval(self.start_x - radius, self.start_y - radius, 
+                                                        self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
+                                                        self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
+                                                        outline='red', tags="final_area_circle")
 
-                    def __destroy_circles(self, event):
-                        """ Removes any area measurement markers on the canvas """
+                                box_image = self.canvas.coords(self.container)
+                                scaled_area = (np.pi*radius**2)*((self.imheight*self.imwidth)/(box_image[2]*box_image[3]))
+
+                                # create area label, which uses the same font size as defect labels for now
+                                # check if new font size applied due to zoom, if not apply default font size
+                                if self.__new_font_size == None:
+                                    area_font_size = label_font_size
+                                else:
+                                    area_font_size = self.__new_font_size
+                                self.canvas.create_text(self.start_x - radius, self.start_y - radius, text=("Area = " + str(np.pi*radius**2)), 
+                                                            font=("Arial", -area_font_size), tags = ("text", "final_area_circle"))
+                                self.start_x = None
+                                self.start_y = None
+                        
+                        elif self.measure_choice == "Line":
+                            if self.start_x is not None and self.start_y is not None:
+                                self.canvas.delete("temp_line")
+                                length = ((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5
+                                self.canvas.create_line(self.start_x, self.start_y, self.canvas.canvasx(event.x), self.canvas.canvasy(event.y),
+                                                        fill='red', width = 2, tags="final_line_length")
+
+                                # create text label, which uses the same font size as defect labels for now
+                                # check if new font size applied due to zoom, if not apply default font size
+                                if self.__new_font_size == None:
+                                    line_font_size = label_font_size
+                                else:
+                                    line_font_size = self.__new_font_size
+                                self.canvas.create_text(self.start_x, self.start_y, text=("Length = " + str(length)), 
+                                                            font=("Arial", -line_font_size), tags = ("text", "final_line_length"))
+                                self.start_x = None
+                                self.start_y = None
+
+                    def __destroy_measure_markers(self, event):
+                        """ Removes any measurement markers on the canvas """
                         for item in self.canvas.find_withtag("final_area_circle"):
+                            self.canvas.delete(item)
+                        for item in self.canvas.find_withtag("final_line_length"):
                             self.canvas.delete(item)
                 
                     def __move_from(self, event):
@@ -558,25 +607,6 @@ def defect_viewer(self):
                 app = TileWindow(tk.Toplevel(), path=filename, window_name = tile_name)
                 app.mainloop()
 
-    # This portion of defect_view function serves to plot the initial mosaic with associated defects
-    # It is this mosaic where tiles can be selected from
-
-    # connect to the database containing analysis and scan information
-    conn = sqlite3.connect(db_origin)
-    cur = conn.cursor()
-
-    # sql queries used to retrieve defect and image data
-    sql_cmd_pos = "SELECT * FROM vwImages WHERE ScanID = ?;" 
-    sql_cmd_def = "SELECT * FROM vwDefectsLegacy WHERE AnalysisID = ?;" 
-    
-    image_data = np.array(cur.execute(sql_cmd_pos,(str(scan_id),)).fetchall()) # fetch all data from image table
-    defect_data = np.array(cur.execute(sql_cmd_def,(str(analysis_id),)).fetchall()) # fetch all data from defect table
-
-    # create a new tkinter window for plotting the mosaic of the scans
-    mosaic_window = tk.Toplevel()
-    sample_name = (db_origin.split("/"))[-1]
-    mosaic_window.title(sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(analysis_id))
-
     class DefectBinning:
         """ Defect Binning Class """
         def __init__(self):       
@@ -691,6 +721,8 @@ def defect_viewer(self):
             self.mosaic_settings_window = None
             self.font_size_defect_label = None
             self.defect_binning_obj = None
+            self.defect_label_text_choices = np.copy(mosaic_obj.defect_label_text_choices) # create copy to avoid overwritting
+            self.analysis_id = mosaic_obj.analysis_id
             
             # call function to create initial settings panel
             self.main_mosaic_settings()
@@ -707,22 +739,68 @@ def defect_viewer(self):
             entry_font_size_defect_label = tk.Entry(self.mosaic_settings_window, textvariable = self.font_size_defect_label, width = 5)
             entry_font_size_defect_label.grid(row = 1, column = 2, columnspan = 2)
 
+            # change the analysis ID and replot defects
+            self.analysis_id_change = tk.StringVar(self.mosaic_settings_window, value = self.analysis_id)
+            tk.Label(self.mosaic_settings_window, text='Analysis ID').grid(row=2, column = 0, columnspan = 2)
+            entry_analysis_id_change = tk.Entry(self.mosaic_settings_window, textvariable = self.analysis_id_change, width = 5)
+            entry_analysis_id_change.grid(row = 2, column = 2, columnspan = 2)
+            
+            # button to open defect text label options
+            button_defect_label_text = tk.Button(self.mosaic_settings_window, text='Defect Text Options', width = 16, command = self.defect_text_options)
+            button_defect_label_text.grid(row = 1, column = 4)
+
             # button to open defect binning window
             button_defect_binning = tk.Button(self.mosaic_settings_window, text='Binning', width = 10, command = self.call_defect_binning)
-            button_defect_binning.grid(row = 2, column = 1)
+            button_defect_binning.grid(row = 3, column = 1)
 
             # button to apply settings
             button_accept = tk.Button(self.mosaic_settings_window, text='Accept', width = 10, command = self.return_choices_mosaic)
-            button_accept.grid(row = 2, column = 3)
+            button_accept.grid(row = 3, column = 3)
 
             # button to close without saving
             button_close = tk.Button(self.mosaic_settings_window, text='Close', width = 10, command=self.mosaic_settings_window.destroy)
-            button_close.grid(row = 3, column = 3)
-            
+            button_close.grid(row = 4, column = 3)
 
         def call_defect_binning(self):
             """ Creates instance of DefectBinning class """
             self.defect_binning_obj = DefectBinning()
+            
+        def defect_text_options(self):
+            """ Creates window with defect label text options """
+            text_options_window = tk.Toplevel()
+            text_options_window.title('Defect Label Text Options')
+            
+            def set_text_options(checkbox_vars):
+                """ Set the current text display options """
+                #f = lambda checkbox_vars: checkbox_vars.get()
+                #self.defect_label_text_choices = (f(checkbox_vars)).astype(bool)
+                for idx, value in enumerate(checkbox_vars):
+                    self.defect_label_text_choices[idx] = bool(value.get())
+            
+            options = ["DefectID", "ImageID", "AnalysisID", "DeviceID", 
+                      "X", "Y", "W", "H", "Area", "Intensity", "IntensityDeviation",
+                     "Eccentricity", "Orientation", "XinDevice", "YinDevice", "ClassID",
+                     "Score", "Contour"]
+            
+            checkbox_vars = np.array([]) # keep track of the checkbox variables
+            converted_choices = self.defect_label_text_choices.astype(int) # convert to int, tkinter does not like numpy booleans
+            
+            # now create the checkboxes
+            for i, option in enumerate(options):
+                checkbox_vars = np.append(checkbox_vars, tk.IntVar(text_options_window, value = converted_choices[i]))
+                checkbox = tk.Checkbutton(text_options_window, text=option, variable=checkbox_vars[i])
+                checkbox.pack()
+            
+            # button to apply settings
+            button_accept = tk.Button(text_options_window, text='Set Options', 
+                                      width = 10, command = lambda arg = checkbox_vars: set_text_options(arg))
+            button_accept.pack()
+            
+            # button to close without saving
+            button_close = tk.Button(text_options_window, text='Close', width = 10, command=text_options_window.destroy)
+            button_close.pack()
+            
+            #text_options_window.mainloop()
             
         def return_choices_mosaic(self):
             """ Sends input settings back to MosaicCreator """  
@@ -730,6 +808,11 @@ def defect_viewer(self):
             mosaic_obj.binning_ranges = self.binning_ranges
             mosaic_obj.binning_colors = self.binning_colors
             mosaic_obj.inf_bin_color = self.inf_bin_color
+            mosaic_obj.defect_label_text_choices = np.copy(self.defect_label_text_choices)
+            # update defect data if needed
+            if mosaic_obj.analysis_id != self.analysis_id_change.get():
+                mosaic_obj.analysis_id = self.analysis_id_change.get()
+                mosaic_obj.update_analysis_info()
             
             # re-plot the mosaic with the new settings
             mosaic_obj.plot_defects()
@@ -742,13 +825,43 @@ def defect_viewer(self):
             self.binning_ranges = np.array([]) # the desired binning ranges and colors are passed from DefectBinning to MosaicSettings to MosaicCreator
             self.binning_colors = np.array([]) 
             self.inf_bin_color = 'red'
+            # this array keeps track of the defect info which will be output on the defect label text line
+            self.defect_label_text_choices = np.array([False, False, False, False, True, True, False, False, True, False,
+                                                       False, False, False, False, False, False, False, False])
+
+            # this instance variable is initially set to what was passed from root
+            # may be overwritten by mosaic settings
+            self.analysis_id = analysis_id
             
             # instance variable initialization
             self.canvas = None
             self.images = None
+            self.mosaic_settings_obj = None
+
+            # create a new tkinter window for plotting the mosaic of the scans
+            self.mosaic_window = tk.Toplevel()
+            self.sample_name = (db_origin.split("/"))[-1]
+            self.mosaic_window.title(self.sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(self.analysis_id))
+
+            # connect to the database containing analysis and scan information
+            self.conn = sqlite3.connect(db_origin)
+            self.cur = self.conn.cursor()
+        
+            # sql queries used to retrieve defect and image data
+            self.sql_cmd_pos = "SELECT * FROM vwImages WHERE ScanID = ?;" 
+            self.sql_cmd_def = "SELECT * FROM vwDefectsLegacy WHERE AnalysisID = ?;" 
+            
+            self.image_data = np.array(self.cur.execute(self.sql_cmd_pos,(str(scan_id),)).fetchall()) # fetch all data from image table
+            self.defect_data = np.array(self.cur.execute(self.sql_cmd_def,(str(self.analysis_id),)).fetchall()) # fetch all data from defect table
             
             # call image plotting function upon class object creation
             self.plot_mosaic()
+
+        def update_analysis_info(self):
+            """ Function to update defect data """
+            self.defect_data = np.array(self.cur.execute(self.sql_cmd_def,(str(self.analysis_id),)).fetchall()) # fetch all data from defect table  
+            # now update the name of the window
+            self.mosaic_window.title(self.sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(self.analysis_id))
 
         def call_mosaic_settings(self):
             """ Creates instance of MosaicSettings class """
@@ -758,10 +871,10 @@ def defect_viewer(self):
             """ Plot the defects onto the mosaic created by plot_mosaic function """
             self.canvas.delete("DEFECT_MARK") # deletes all current defect marks to allow for re-plotting
             # iterate through all rows of defect data, plot each defect on the canvas
-            for idx, def_row in enumerate(defect_data):
-                row_index = np.where(np.any(image_data[:,0:1].astype(float) == float(def_row[1]), axis=1))[0] # find the tile where defect resides
-                x = float(def_row[13]) * (tile_size / float((image_data[row_index,9])[0])) # scale defect coords according to image scale
-                y = float(def_row[14]) * (tile_size / float((image_data[row_index,10])[0]))
+            for idx, def_row in enumerate(self.defect_data):
+                row_index = np.where(np.any(self.image_data[:,0:1].astype(float) == float(def_row[1]), axis=1))[0] # find the tile where defect resides
+                x = float(def_row[13]) * (tile_size / float((self.image_data[row_index,9])[0])) # scale defect coords according to image scale
+                y = float(def_row[14]) * (tile_size / float((self.image_data[row_index,10])[0]))
                 scale = 20
                 bin_range_index = np.searchsorted(self.binning_ranges, float(def_row[8])) # get index corresponding to binning range of defect area
                 # set defect mark color based on binning color corresponding to index found above
@@ -776,19 +889,19 @@ def defect_viewer(self):
         def plot_mosaic(self):
             """ Plot the images onto a selectable mosaic """
             # create the canvas with size according to input tile size
-            self.canvas = Canvas(mosaic_window, width = tile_size*(max((image_data[:,8:9]).astype(int))[0]+1), 
-                            height = tile_size*(max((image_data[:,7:8]).astype(int))[0]+1), bd = 0)
+            self.canvas = Canvas(self.mosaic_window, width = tile_size*(max((self.image_data[:,8:9]).astype(int))[0]+1), 
+                            height = tile_size*(max((self.image_data[:,7:8]).astype(int))[0]+1), bd = 0)
         
-            button_advanced = tk.Button(mosaic_window, text='Advanced', width = 10, command = self.call_mosaic_settings)
+            button_advanced = tk.Button(self.mosaic_window, text='Advanced', width = 10, command = self.call_mosaic_settings)
 
             # create new label in root window which tracks image loading progress
             tk.Label(root_obj.root, text='Loading...').grid(row=6, column = 2, columnspan = 2)
-            load_progress = tk.Label(root_obj.root, text='0/' + str(len(image_data)))
+            load_progress = tk.Label(root_obj.root, text='0/' + str(len(self.image_data)))
             load_progress.grid(row = 6, column = 3, columnspan = 2)
             root_obj.root.update()
             # iterate through all rows of image data, plot each tile on the canvas
             self.images = []
-            for idx, img_row in enumerate(image_data):
+            for idx, img_row in enumerate(self.image_data):
                 image = Image.open(image_origin + img_row[2]) 
                 image = image.resize((tile_size,tile_size),Image.NEAREST) # resize tile and interpolate
                 self.images.append(ImageTk.PhotoImage(image))
@@ -802,7 +915,7 @@ def defect_viewer(self):
                 #end_time = time.perf_counter()
                 #print(end_time - start_time)
                 self.canvas.create_image(int(img_row[8])*tile_size, int(img_row[7])*tile_size, anchor=tk.NW, image=self.images[idx], tags = "IMAGE_TILE")
-                load_progress.config(text = str(idx) + '/' + str(len(image_data))) # update load progress label in root
+                load_progress.config(text = str(idx+1) + '/' + str(len(self.image_data))) # update load progress label in root
                 root_obj.root.update() # update root window
                 self.canvas.pack() # this shows the images being actively loaded into the canvas
             
@@ -810,14 +923,14 @@ def defect_viewer(self):
                 
             self.plot_defects() # function that plots the defects onto the canvas created above
 
-            self.canvas.bind('<Button-1>', lambda event, arg = image_data, arg1 = defect_data: clicked(self, event, arg, arg1)) # makes mosaic selectable
+            self.canvas.bind('<Button-1>', lambda event: clicked(self, event)) # makes mosaic selectable
             
             self.canvas.pack()
             button_advanced.pack()
 
     # create object of MosaicCreator
     mosaic_obj = MosaicCreator()
-    mosaic_window.mainloop()
+    mosaic_obj.mosaic_window.mainloop()
 
 class RootSettings:
     """ Advanced Settings Class for Root Window """ 
