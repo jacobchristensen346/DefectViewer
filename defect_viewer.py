@@ -1,17 +1,6 @@
-# this version removes the legacy feature of plotting images sequentially
-# now fully replaced with plotting just the mosaic image, much quicker
-
-# fixed the defect mark oval shape + rotation to match the nSpec defect viewer
-# width and height of defect needed to be flipped
-
-# added in a checkbox to the root window allowing for image viewing without defects being plotted
-# useful when there have been no analyses performed on an image set, so it won't give an error when trying to plot nonexistent defects
-
-# fixed the scaling issue with length and area measurements created by the user
-
-# added in user option to change size of defect marks on mosaic canvas
-
-# changed some arrangement of objects in the windows
+# changed the analysis ID and scan ID inputs in the root window to OptionMenu objects
+# These are dropdown menus that populate when the image and db filepaths are chosen
+# helps users know their options without needing to open the database file
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -50,7 +39,8 @@ def defect_viewer(self):
     db_origin = self.db_file_var.get()
     scan_id = self.scan_id_var.get()
     analysis_id = self.ana_id_var.get()
-    image_scale = int(self.image_scale_var.get())        
+    image_scale = int(self.image_scale_var.get())
+    image_view_only = self.image_view_only.get()
  
     def clicked(self, event):
         """ Contains all functionality to support click event
@@ -174,7 +164,7 @@ def defect_viewer(self):
                         self.__show_image()  # show image on the canvas
                         self.__create_option_buttons() # create the option buttons next to the canvas
                         # check if user has selected image view only
-                        if root_obj.image_view_only.get() == 0:
+                        if mosaic_obj.image_view_only == 0:
                             self.__show_defects()  # show defects on the canvas
                             self.__show_labels() # show defect labels on the canvas
                         self.canvas.focus_set()  # set focus on the canvas
@@ -830,7 +820,7 @@ def defect_viewer(self):
             
             # re-plot the mosaic with the new settings
             # check if user has selected image view only
-            if root_obj.image_view_only.get() == 0:
+            if mosaic_obj.image_view_only == 0:
                 mosaic_obj.plot_defects()
 
     class MosaicCreator:
@@ -849,6 +839,9 @@ def defect_viewer(self):
             # this instance variable is initially set to what was passed from root
             # may be overwritten by mosaic settings
             self.analysis_id = analysis_id # analysis ID set to instance variable to allow change after plotting
+            
+            # retrieve user choice of viewing image only (no defect plotting)
+            self.image_view_only = root_obj.image_view_only.get()
             
             # instance variable initialization
             self.canvas = None
@@ -925,7 +918,7 @@ def defect_viewer(self):
             """ Plot the mosaic onto a selectable canvas """                
             # create new label in root window which tracks image loading progress
             load_progress = tk.Label(root_obj.root, text='Loading Image...')
-            load_progress.grid(row=5, column = 2, columnspan = 2)
+            load_progress.grid(row=6, column = 2, columnspan = 2)
             root_obj.root.update()
 
             list_of_images = np.array(next(os.walk(image_origin))[2]) # list of images from directory
@@ -959,7 +952,7 @@ def defect_viewer(self):
             self.mos_tile_height = self.mos_resize_height / max_rows
             
             # check if user has selected image view only
-            if root_obj.image_view_only.get() == 0: 
+            if self.image_view_only == 0: 
                 self.plot_defects() # function that plots the defects onto the canvas created above
 
             self.canvas.bind('<Button-1>', lambda event: clicked(self, event)) # makes mosaic selectable
@@ -1020,6 +1013,8 @@ class Root:
         self.e5 = None
         self.font_size_input = None
         self.image_view_only = None
+        self.scan_options = np.array(['Select Choice'])
+        self.analysis_options = np.array(['Select Choice'])
         
         # call function to create main panel
         self.main_root_window()
@@ -1028,13 +1023,14 @@ class Root:
         """ Create the main root panel """
         
         self.root = tk.Tk()
-        self.root.title('Defect Viewer')
+        self.root.title('Defect Viewer v1.0')
 
         # create variables for input in Root gui
         self.img_loc_var = tk.StringVar() # path to images
         self.db_file_var = tk.StringVar() # path to database file
-        self.scan_id_var = tk.StringVar() # Scan ID
-        self.ana_id_var = tk.StringVar() # Analysis ID
+        self.scan_id_var = tk.StringVar(self.root, value = self.scan_options[0]) # Scan ID
+        self.scan_id_var.trace('w', self.scan_select) # cause scan selection to update analysis option menu
+        self.ana_id_var = tk.StringVar(self.root, value = self.analysis_options[0]) # Analysis ID
         self.image_scale_var = tk.StringVar() # Desired size of tiles in mosaic
         
         # initialize advanced settings variables to default values
@@ -1044,19 +1040,23 @@ class Root:
         # create all the text entry labels and fields
         tk.Label(self.root, text='Image Location').grid(row = 0, column = 0, columnspan = 1)
         tk.Label(self.root, text='Database File').grid(row = 1, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Scan ID').grid(row = 2, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Analysis ID').grid(row = 3, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Image Scale').grid(row=4, column = 0, columnspan = 1)
+        tk.Label(self.root, text='Scan ID').grid(row = 3, column = 0, columnspan = 1)
+        tk.Label(self.root, text='Analysis ID').grid(row = 4, column = 0, columnspan = 1)
+        tk.Label(self.root, text='Image Scale').grid(row=5, column = 0, columnspan = 1)
         self.e1 = tk.Entry(self.root, textvariable = self.img_loc_var, width = 20)
         self.e2 = tk.Entry(self.root, textvariable = self.db_file_var, width = 20)
-        self.e3 = tk.Entry(self.root, textvariable = self.scan_id_var, width = 10)
-        self.e4 = tk.Entry(self.root, textvariable = self.ana_id_var, width = 10)
+        self.e3 = ttk.OptionMenu(self.root, self.scan_id_var, *self.scan_options)
+        self.e4 = ttk.OptionMenu(self.root, self.ana_id_var, *self.analysis_options)
         self.e5 = tk.Entry(self.root, textvariable = self.image_scale_var, width = 10)
         self.e1.grid(row = 0, column = 2, columnspan = 1)
         self.e2.grid(row = 1, column = 2, columnspan = 1)
-        self.e3.grid(row = 2, column = 2, columnspan = 1, sticky = 'w')
-        self.e4.grid(row = 3, column = 2, columnspan = 1, sticky = 'w')
-        self.e5.grid(row = 4, column = 2, columnspan = 1, sticky = 'w')
+        self.e3.grid(row = 3, column = 2, columnspan = 1, sticky = 'w')
+        self.e4.grid(row = 4, column = 2, columnspan = 1, sticky = 'w')
+        self.e5.grid(row = 5, column = 2, columnspan = 1, sticky = 'w')
+
+        # button to set the image and database paths, updating scan and analysis option menus
+        button_set_paths = tk.Button(self.root, text='Set Image and DB paths', command=self.set_paths)
+        button_set_paths.grid(row = 2, column = 1, columnspan = 3, sticky = 'w')
         
         # these buttons allow the file explorer to be opened to receive directory inputs
         button_file = tk.Button(self.root, text='...', width = 3, command=self.browse_file)
@@ -1066,12 +1066,12 @@ class Root:
         
         # this button opens up advanced settings
         button_advanced = tk.Button(self.root, text='Advanced', width = 10, command=self.advanced_settings)
-        button_advanced.grid(row = 5, column = 0, columnspan = 1)
+        button_advanced.grid(row = 6, column = 0, columnspan = 1)
         
         # create a checkbox to signal when to only open image and not plot defects
         self.image_view_only = tk.IntVar(self.root, value = 0)
         checkbox_seq = tk.Checkbutton(self.root, text='Image Viewer Only', variable=self.image_view_only)
-        checkbox_seq.grid(row = 6, column = 0, columnspan = 3, sticky = 'w')
+        checkbox_seq.grid(row = 7, column = 0, columnspan = 3, sticky = 'w')
         
         # these two buttons either plot using the input info, or close out of the software
         # button_plot = tk.Button(self.root, text='Plot', width = 10,  
@@ -1079,8 +1079,55 @@ class Root:
         #                         arg3 = self.ana_id_var, arg4 = self.image_scale_var: defect_viewer(self, arg, arg1, arg2, arg3, arg4))
         button_plot = tk.Button(self.root, text='Plot', width = 10, command = lambda: defect_viewer(self))
         button_close = tk.Button(self.root, text='Close', width = 10, command=self.root.destroy)
-        button_plot.grid(row = 5, column = 4, columnspan = 1)
-        button_close.grid(row = 6, column = 4, columnspan = 1)
+        button_plot.grid(row = 6, column = 4, columnspan = 1)
+        button_close.grid(row = 7, column = 4, columnspan = 1)
+        
+    def set_paths(self):
+        """ Sets the currently input database and image directory paths
+            Updates the scan dropdown menu according to database file contents """
+        # connect to the currently selected database file
+        conn = sqlite3.connect(self.e2.get())
+        cur = conn.cursor()
+
+        # sql queries used to retrieve scan info
+        sql_cmd_scn = "SELECT * FROM Scans;" 
+        sql_cmd_scn_prop = "SELECT * FROM ScanProperties"
+
+        scans_info = np.array(cur.execute(sql_cmd_scn).fetchall()) # fetch all data from Scans table
+        scan_prop_info = np.array(cur.execute(sql_cmd_scn_prop).fetchall()) # fetch all data from Scan Properties table
+        
+        # get all of the scan IDs
+        self.scan_options = scans_info[:,0]
+        
+        # update the scan ID option menu with choices
+        menu = self.e3["menu"]
+        menu.delete(0, "end")
+        for string in self.scan_options:
+            menu.add_command(label=string, 
+                             command=lambda value=string: self.scan_id_var.set(value))
+        
+    def scan_select(self, *args):
+        """ Updates the analysis option menu when scan is selected from its dropdown """
+        # check if scan selection has occured yet
+        if self.scan_id_var.get() != 'Select Choice':
+            # connect to the currently selected database file
+            conn = sqlite3.connect(self.e2.get())
+            cur = conn.cursor()
+
+            # sql queries used to retrieve analysis info
+            sql_cmd_anly = "SELECT * FROM Analysis"
+
+            analysis_info = np.array(cur.execute(sql_cmd_anly).fetchall()) # fetch all data from Analysis table
+
+            # filter list for Analysis IDs corresponding to the chosen Scan ID
+            self.analysis_options = (analysis_info[analysis_info[:, 4] == self.scan_id_var.get()])[:,0]
+
+            # update the analysis ID option menu with choices
+            menu = self.e4["menu"]
+            menu.delete(0, "end")
+            for string in self.analysis_options:
+                menu.add_command(label=string, 
+                                 command=lambda value=string: self.ana_id_var.set(value))
 
     def advanced_settings(self):
         """ Creates instance of advanced settings class """  
