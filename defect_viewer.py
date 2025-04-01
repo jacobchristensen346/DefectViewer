@@ -1,6 +1,10 @@
-# changed the analysis ID and scan ID inputs in the root window to OptionMenu objects
-# These are dropdown menus that populate when the image and db filepaths are chosen
-# helps users know their options without needing to open the database file
+# changed the analysis ID selection from the mosaic settings window to be an OptionMenu object (dropdown) instead of text entry field
+
+# added in analysis and scan properties windows to the root window. Needs more properties added to both...
+
+# added in some code to delete the load progress label printed onto the root window
+# this ensures that the previous load progress label is removed in the case of a user input error
+# the next load progress label won't be overlaid on top of the previous one, the old one is always removed
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -35,7 +39,7 @@ Images are output in a mosaic with defects overlaid
 def defect_viewer(self):
     """Contains all the functionality of the app
     Only activates once inputs selected in gui"""
-    image_origin = self.img_loc_var.get() + '/' # Here we gather our variables of interest entered into the gui
+    image_origin = self.img_loc_var + '/' # Here we gather our variables of interest entered into the gui
     db_origin = self.db_file_var.get()
     scan_id = self.scan_id_var.get()
     analysis_id = self.ana_id_var.get()
@@ -92,7 +96,9 @@ def defect_viewer(self):
                     """ Display and zoom image """
                     def __init__(self, placeholder, path):
                         """ Initialize the ImageFrame """
-                        self.measure_choice = None
+                        self.hide_defect_labels = None # tracks user's choice to display defect labels
+                        self.hide_defect_marks = None # tracks user's choice to display defect marks
+                        self.measure_choice = None # variable tracks user's choice of manual measurement on tile canvas
                         self.start_x = None # coordinates which aid in the class functions for drawing areas
                         self.start_y = None
                         self.__new_font_size = None # initialize shared variable for adjusting font sizes upon zoom
@@ -317,7 +323,7 @@ def defect_viewer(self):
                                     x1 = x + (float(def_row[7])*2)/2
                                     y1 = y + (float(def_row[6])*2)/2
                                     self.canvas.create_polygon(tuple(self.__poly_oval_v2(x0, y0, x1, y1, 
-                                                rotation = float(def_row[12]))), outline = bin_outline_color, fill = "", width = 2)
+                                                rotation = float(def_row[12]))), outline = bin_outline_color, fill = "", width = 2, tags = "DEFECT_TILE_MARK")
 
                     def __show_labels(self):
                         """ Plots defect labels on selected image """
@@ -341,8 +347,20 @@ def defect_viewer(self):
                                     defect_select_info = defect_all_info[mosaic_obj.defect_label_text_choices] # filter info array to user selections
                                     defect_label_text = ", ".join(defect_select_info) # combine all elements into one string
                                     self.canvas.create_text(x-box_image[2]/scale, y-box_image[3]/scale, 
-                                                            text = defect_label_text, font=("Arial", -label_font_size), tags = "text")
+                                                            text = defect_label_text, font=("Arial", -label_font_size), tags = ("text", "DEFECT_TILE_LABEL"))
 
+                    def __defect_mark_vis(self, *args):
+                        """ Hides or reveals defect labels and/or marks when toggled """
+                        if self.hide_defect_marks.get() == 1:
+                            self.canvas.itemconfig("DEFECT_TILE_MARK", state="hidden")
+                        else:
+                            self.canvas.itemconfig("DEFECT_TILE_MARK", state="normal")
+                            
+                        if self.hide_defect_labels.get() == 1:
+                            self.canvas.itemconfig("DEFECT_TILE_LABEL", state="hidden")
+                        else:
+                            self.canvas.itemconfig("DEFECT_TILE_LABEL", state="normal")
+                                    
                     def __show_image(self):
                         """ Show image on the Canvas """
                         box_image = self.canvas.coords(self.container)  # get image area
@@ -393,6 +411,7 @@ def defect_viewer(self):
                             
                     def __create_option_buttons(self):
                         """ Create option buttons off to the side of the canvas """
+                        # these labels/buttons relate to manual measurement tools
                         tk.Label(self.__imframe, text='Measurement Tool').grid(row=1, column = 1, columnspan = 1)
                         button_select_circle = tk.Button(self.__imframe, text='Circle', width = 10, 
                                                          command = lambda arg = "Circle": self.__set_measure_choice(arg))
@@ -401,7 +420,19 @@ def defect_viewer(self):
                         button_select_line = tk.Button(self.__imframe, text='Line', width = 10, 
                                                        command = lambda arg = "Line": self.__set_measure_choice(arg))
                         button_select_line.grid(row=3, column=1, sticky='nswe')
-                    
+                        
+                        # checkbox to toggle defect mark visibility
+                        self.hide_defect_marks = tk.IntVar(self.__imframe, value = 0)
+                        self.hide_defect_marks.trace('w', self.__defect_mark_vis) # call visibility function upon value change
+                        checkbox_mark_vis = tk.Checkbutton(self.__imframe, text='Hide Defect Marks', variable=self.hide_defect_marks)
+                        checkbox_mark_vis.grid(row = 2, column = 0, columnspan = 1, sticky = 'w')
+                        
+                        # checkbox to toggle defect label visibility
+                        self.hide_defect_labels = tk.IntVar(self.__imframe, value = 0)
+                        self.hide_defect_labels.trace('w', self.__defect_mark_vis) # call visibility function upon value change
+                        checkbox_label_vis = tk.Checkbutton(self.__imframe, text='Hide Defect Labels', variable=self.hide_defect_labels)
+                        checkbox_label_vis.grid(row = 3, column = 0, columnspan = 1, sticky = 'w')
+
                     def __set_measure_choice(self, arg):
                         """ Set which kind of object to draw with the measuring tool """
                         self.measure_choice = arg
@@ -638,11 +669,11 @@ def defect_viewer(self):
 
             # button to accept binning and send to main mosaic settings window
             self.button_set_binning = tk.Button(self.defect_binning_window, text='Set Binning', width = 10, command = self.set_binning_options)
-            self.button_set_binning.grid(row = self.row_num + 1, column = 3)
+            self.button_set_binning.grid(row = self.row_num + 2, column = 3)
 
             # button to close window without setting new binning
             self.button_close = tk.Button(self.defect_binning_window, text='Close', width = 10, command=self.defect_binning_window.destroy)
-            self.button_close.grid(row = self.row_num + 2, column = 3)
+            self.button_close.grid(row = self.row_num + 3, column = 3)
 
             # labels for the two columns, binning ceiling value and binning color value
             tk.Label(self.defect_binning_window, text='Bin Ceiling').grid(row=1, column = 0, columnspan = 1)
@@ -734,37 +765,42 @@ def defect_viewer(self):
 
             # font size of defect label text
             self.font_size_defect_label = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.font_size_defect_label)
-            tk.Label(self.mosaic_settings_window, text='Defect Label Font Size').grid(row=1, column = 0, columnspan = 2)
+            tk.Label(self.mosaic_settings_window, text='Defect Label Font Size').grid(row=1, column = 0, columnspan = 1)
             entry_font_size_defect_label = tk.Entry(self.mosaic_settings_window, textvariable = self.font_size_defect_label, width = 5)
-            entry_font_size_defect_label.grid(row = 1, column = 2, columnspan = 2)
+            entry_font_size_defect_label.grid(row = 1, column = 1, columnspan = 1)
             
             # change the size of the defect markers on the mosaic canvas
             self.defect_mark_size = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.defect_mark_size)
-            tk.Label(self.mosaic_settings_window, text='Defect Mark Size').grid(row=2, column = 0, columnspan = 2)
+            tk.Label(self.mosaic_settings_window, text='Defect Mark Size').grid(row=2, column = 0, columnspan = 1)
             entry_mark_resize = tk.Entry(self.mosaic_settings_window, textvariable = self.defect_mark_size, width = 5)
-            entry_mark_resize.grid(row = 2, column = 2, columnspan = 2)
+            entry_mark_resize.grid(row = 2, column = 1, columnspan = 1)
 
             # change the analysis ID and replot defects
-            self.analysis_id_change = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.analysis_id)
-            tk.Label(self.mosaic_settings_window, text='Analysis ID').grid(row=3, column = 0, columnspan = 2)
-            entry_analysis_id_change = tk.Entry(self.mosaic_settings_window, textvariable = self.analysis_id_change, width = 5)
-            entry_analysis_id_change.grid(row = 3, column = 2, columnspan = 2)
+            analysis_options = np.insert(root_obj.analysis_options, 0, 'Select Choice')
+            self.analysis_id_change = tk.StringVar(self.mosaic_settings_window, value = analysis_options[0])
+            tk.Label(self.mosaic_settings_window, text='Analysis ID').grid(row=3, column = 0, columnspan = 1)
+            entry_analysis_id_change = ttk.OptionMenu(self.mosaic_settings_window, self.analysis_id_change, *analysis_options)
+            entry_analysis_id_change.grid(row = 3, column = 1, columnspan = 3, sticky = 'w')
+            # self.analysis_id_change = tk.StringVar(self.mosaic_settings_window, value = mosaic_obj.analysis_id)
+            # tk.Label(self.mosaic_settings_window, text='Analysis ID').grid(row=3, column = 0, columnspan = 2)
+            # entry_analysis_id_change = tk.Entry(self.mosaic_settings_window, textvariable = self.analysis_id_change, width = 5)
+            # entry_analysis_id_change.grid(row = 3, column = 2, columnspan = 2)
 
             # button to open defect binning window
             button_defect_binning = tk.Button(self.mosaic_settings_window, text='Binning', width = 10, command = self.call_defect_binning)
-            button_defect_binning.grid(row = 4, column = 1)
+            button_defect_binning.grid(row = 4, column = 0)
             
             # button to open defect text label options
             button_defect_label_text = tk.Button(self.mosaic_settings_window, text='Defect Text Options', width = 16, command = self.defect_text_options)
-            button_defect_label_text.grid(row = 5, column = 1)
+            button_defect_label_text.grid(row = 5, column = 0)
 
             # button to apply settings
             button_accept = tk.Button(self.mosaic_settings_window, text='Accept', width = 10, command = self.return_choices_mosaic)
-            button_accept.grid(row = 4, column = 4)
+            button_accept.grid(row = 4, column = 3)
 
             # button to close without saving
             button_close = tk.Button(self.mosaic_settings_window, text='Close', width = 10, command=self.mosaic_settings_window.destroy)
-            button_close.grid(row = 5, column = 4)
+            button_close.grid(row = 5, column = 3)
 
         def call_defect_binning(self):
             """ Creates instance of DefectBinning class """
@@ -814,7 +850,7 @@ def defect_viewer(self):
             mosaic_obj.defect_mark_size = self.defect_mark_size.get()
             mosaic_obj.defect_label_text_choices = np.copy(self.defect_label_text_choices)
             # update defect data if needed
-            if mosaic_obj.analysis_id != self.analysis_id_change.get():
+            if mosaic_obj.analysis_id != self.analysis_id_change.get() and self.analysis_id_change.get() != 'Select Choice':
                 mosaic_obj.analysis_id = self.analysis_id_change.get()
                 mosaic_obj.update_analysis_info()
             
@@ -828,7 +864,7 @@ def defect_viewer(self):
         def __init__(self):
             # initialize variables to default values, may be overwritten by advanced mosaic settings
             self.font_size_defect_label = "20"
-            self.defect_mark_size = "5"
+            self.defect_mark_size = "3"
             self.binning_ranges = np.array([]) # the desired binning ranges and colors are passed from DefectBinning to MosaicSettings to MosaicCreator
             self.binning_colors = np.array([]) 
             self.inf_bin_color = 'red'
@@ -917,7 +953,12 @@ def defect_viewer(self):
         def plot_mosaic(self):
             """ Plot the mosaic onto a selectable canvas """                
             # create new label in root window which tracks image loading progress
+            # first destroy previous loading progress label
+            for child in root_obj.root.winfo_children():
+                if "LOAD_PROGRESS" in child.bindtags():
+                    child.destroy()
             load_progress = tk.Label(root_obj.root, text='Loading Image...')
+            load_progress.bindtags(load_progress.bindtags() + ("LOAD_PROGRESS",)) # add custom tag for deletion purposes
             load_progress.grid(row=6, column = 2, columnspan = 2)
             root_obj.root.update()
 
@@ -1000,7 +1041,8 @@ class Root:
         
         # instance variable initialization
         self.root = None
-        self.img_loc_var = None
+        self.img_loc_var = None # path to folder containing images for specific scan
+        self.scan_dir_var = None # path to folder containing all scan folders
         self.db_file_var = None
         self.scan_id_var = None
         self.ana_id_var = None
@@ -1015,6 +1057,7 @@ class Root:
         self.image_view_only = None
         self.scan_options = np.array(['Select Choice'])
         self.analysis_options = np.array(['Select Choice'])
+        #self.disable_first_call = 0 # this variable ensures the scan_choice function is not called upon scan_id_var initialization
         
         # call function to create main panel
         self.main_root_window()
@@ -1026,7 +1069,7 @@ class Root:
         self.root.title('Defect Viewer v1.0')
 
         # create variables for input in Root gui
-        self.img_loc_var = tk.StringVar() # path to images
+        self.scan_dir_var = tk.StringVar() # path to folder containing all scan folders
         self.db_file_var = tk.StringVar() # path to database file
         self.scan_id_var = tk.StringVar(self.root, value = self.scan_options[0]) # Scan ID
         self.scan_id_var.trace('w', self.scan_select) # cause scan selection to update analysis option menu
@@ -1037,21 +1080,29 @@ class Root:
         # will be overwritten by user input if desired
         self.font_size_input = tk.StringVar(self.root, value = '6')
         
-        # create all the text entry labels and fields
-        tk.Label(self.root, text='Image Location').grid(row = 0, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Database File').grid(row = 1, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Scan ID').grid(row = 3, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Analysis ID').grid(row = 4, column = 0, columnspan = 1)
-        tk.Label(self.root, text='Image Scale').grid(row=5, column = 0, columnspan = 1)
-        self.e1 = tk.Entry(self.root, textvariable = self.img_loc_var, width = 20)
-        self.e2 = tk.Entry(self.root, textvariable = self.db_file_var, width = 20)
-        self.e3 = ttk.OptionMenu(self.root, self.scan_id_var, *self.scan_options)
-        self.e4 = ttk.OptionMenu(self.root, self.ana_id_var, *self.analysis_options)
-        self.e5 = tk.Entry(self.root, textvariable = self.image_scale_var, width = 10)
+        # text field to enter location of directory containing scan folders
+        tk.Label(self.root, text='Scans Directory').grid(row = 0, column = 0, columnspan = 1)
+        self.e1 = tk.Entry(self.root, textvariable = self.scan_dir_var, width = 20)
         self.e1.grid(row = 0, column = 2, columnspan = 1)
+        
+        # text field to enter location of database file
+        tk.Label(self.root, text='Database File').grid(row = 1, column = 0, columnspan = 1)
+        self.e2 = tk.Entry(self.root, textvariable = self.db_file_var, width = 20)
         self.e2.grid(row = 1, column = 2, columnspan = 1)
+        
+        # dropdown menu to select scan ID
+        tk.Label(self.root, text='Scan ID').grid(row = 3, column = 0, columnspan = 1)
+        self.e3 = ttk.OptionMenu(self.root, self.scan_id_var, *self.scan_options)
         self.e3.grid(row = 3, column = 2, columnspan = 1, sticky = 'w')
+        
+        # dropdown menu to select analysis ID
+        tk.Label(self.root, text='Analysis ID').grid(row = 4, column = 0, columnspan = 1)
+        self.e4 = ttk.OptionMenu(self.root, self.ana_id_var, *self.analysis_options)
         self.e4.grid(row = 4, column = 2, columnspan = 1, sticky = 'w')
+        
+        # text field to enter image scale reduction factor
+        tk.Label(self.root, text='Image Scale').grid(row=5, column = 0, columnspan = 1)
+        self.e5 = tk.Entry(self.root, textvariable = self.image_scale_var, width = 10)
         self.e5.grid(row = 5, column = 2, columnspan = 1, sticky = 'w')
 
         # button to set the image and database paths, updating scan and analysis option menus
@@ -1063,6 +1114,12 @@ class Root:
         button_directory = tk.Button(self.root, text='...', width = 3, command=self.browse_directory)
         button_file.grid(row = 1, column = 4, columnspan = 1, sticky = 'w')
         button_directory.grid(row = 0, column = 4, columnspan = 1, sticky = 'w')
+
+        # these buttons open windows displaying information about the currently selected scan/analysis IDs
+        button_scan_props = tk.Button(self.root, text='Scan Props', command=self.scan_props)
+        button_scan_props.grid(row = 3, column = 4, columnspan = 1, sticky = 'w')
+        button_analysis_props = tk.Button(self.root, text='Analysis Props', command=self.analysis_props)
+        button_analysis_props.grid(row = 4, column = 4, columnspan = 1, sticky = 'w')
         
         # this button opens up advanced settings
         button_advanced = tk.Button(self.root, text='Advanced', width = 10, command=self.advanced_settings)
@@ -1081,13 +1138,106 @@ class Root:
         button_close = tk.Button(self.root, text='Close', width = 10, command=self.root.destroy)
         button_plot.grid(row = 6, column = 4, columnspan = 1)
         button_close.grid(row = 7, column = 4, columnspan = 1)
-        
+
+    def analysis_props(self):
+        """ Displays analysis properties from currently selected analysis ID """
+        if self.ana_id_var.get() == 'Select Choice':
+            print('Please select an analysis ID first')
+        else:    
+            conn = sqlite3.connect(self.e2.get())
+            cur = conn.cursor()
+
+            # sql query used to retrieve scan info
+            sql_cmd_ana_prop = "SELECT * FROM AnalysisProperties WHERE AnalysisID = ?;"
+            sql_cmd_analysis = "SELECT * FROM Analysis WHERE AnalysisID = ?;"
+            sql_cmd_analyzer = "SELECT * FROM Analyzers;"
+
+            ana_prop_info = np.array(cur.execute(sql_cmd_ana_prop,(str(self.ana_id_var.get()),)).fetchall()) # fetch all data from Analysis Properties table
+            analysis_info = np.array(cur.execute(sql_cmd_analysis,(str(self.ana_id_var.get()),)).fetchall()) # fetch all data from Analysis table
+            analyzer_info = np.array(cur.execute(sql_cmd_analyzer).fetchall()) # fetch all data from Analyzers table
+
+            # create the properties window
+            ana_prop_window = tk.Toplevel()
+            ana_prop_window.title('Analysis Properties')
+
+            # retrieve properties of interest
+            analyzer_type = analyzer_info[np.where(analyzer_info[:,0] == analysis_info[0][3])[0][0], 3]
+            num_defects = analysis_info[0][10]
+
+            # place property variables into list
+            prop_list = [analyzer_type, num_defects]
+
+            # property labels of interest in user-friendly form
+            output_labels = np.array(['Analyzer Type', 'Number of Defects'])
+
+            # create all labels and corresponding values
+            for idx, label in enumerate(output_labels):
+                tk.Label(ana_prop_window, text = f"{label:<30}").grid(row = 2 * idx, column = 0, columnspan = 1, sticky = 'w')
+                tk.Label(ana_prop_window, text = prop_list[idx]).grid(row = 2 * idx, column = 1, columnspan = 1, sticky = 'w')
+                ttk.Separator(ana_prop_window, orient = 'horizontal').grid(row = 2 * idx + 1, column = 0, columnspan = 2, sticky = 'ew')
+
+            # button to close window
+            button_close = tk.Button(ana_prop_window, text='Close', width = 10, command=ana_prop_window.destroy)
+            button_close.grid(row = 10, column = 1, columnspan = 1)
+
+    def scan_props(self):
+        """ Displays scan properties from currently selected scan ID """
+        if self.scan_id_var.get() == 'Select Choice':
+            print('Please select a scan ID first')
+        else:    
+            conn = sqlite3.connect(self.e2.get())
+            cur = conn.cursor()
+
+            # sql query used to retrieve scan info
+            sql_cmd_scn_prop = "SELECT * FROM ScanProperties WHERE ScanID = ?;"
+    
+            scan_prop_info = np.array(cur.execute(sql_cmd_scn_prop,(str(self.scan_id_var.get()),)).fetchall()) # fetch all data from Scan Properties table
+
+            # create the properties window
+            scan_prop_window = tk.Toplevel()
+            scan_prop_window.title('Scan Properties')
+            
+            # retrieve the properties of interest
+            sampleID = scan_prop_info[np.where(scan_prop_info == "SampleID")[0][0], np.where(scan_prop_info == "SampleID")[1][0] + 1]
+            lotID = scan_prop_info[np.where(scan_prop_info == "LotID")[0][0], np.where(scan_prop_info == "LotID")[1][0] + 1]
+            job_name = scan_prop_info[np.where(scan_prop_info == "JobName")[0][0], np.where(scan_prop_info == "JobName")[1][0] + 1]
+            auto_focus_set = scan_prop_info[np.where(scan_prop_info == "Autofocus Set")[0][0], np.where(scan_prop_info == "Autofocus Set")[1][0] + 1]
+            num_tiles = scan_prop_info[np.where(scan_prop_info == "Golden Tile Tiles per Device")[0][0], np.where(scan_prop_info == "Golden Tile Tiles per Device")[1][0] + 1]
+            num_devices = scan_prop_info[np.where(scan_prop_info == "Golden Tile Number of Devices")[0][0], np.where(scan_prop_info == "Golden Tile Number of Devices")[1][0] + 1]
+            scan_width_mic = scan_prop_info[np.where(scan_prop_info == "Scan Width Microns")[0][0], np.where(scan_prop_info == "Scan Width Microns")[1][0] + 1]
+            scan_height_mic = scan_prop_info[np.where(scan_prop_info == "Scan Height Microns")[0][0], np.where(scan_prop_info == "Scan Height Microns")[1][0] + 1]
+            die_width_mic = scan_prop_info[np.where(scan_prop_info == "DieWidth")[0][0], np.where(scan_prop_info == "DieWidth")[1][0] + 1]
+            die_height_mic = scan_prop_info[np.where(scan_prop_info == "DieHeight")[0][0], np.where(scan_prop_info == "DieHeight")[1][0] + 1]
+
+            # place property variables into list
+            prop_list = [sampleID, lotID, job_name, auto_focus_set, num_tiles, num_devices, scan_width_mic,
+                        scan_height_mic, die_width_mic, die_height_mic]
+            
+            # property labels of interest in user-friendly form
+            output_labels = np.array(['Sample ID', 'Lot ID', 'Job Name', 'Autofocus Set', 'Tiles per Device',
+                                   'Number of Devices', 'Scan Width (Microns)', 'Scan Height (Microns)',
+                                   'Die Width (Microns)', 'Die Height (Microns)'])
+            
+            # create all labels and corresponding values
+            for idx, label in enumerate(output_labels):
+                tk.Label(scan_prop_window, text = f"{label:<30}").grid(row = 2 * idx, column = 0, columnspan = 1, sticky = 'w')
+                tk.Label(scan_prop_window, text = prop_list[idx]).grid(row = 2 * idx, column = 1, columnspan = 1, sticky = 'w')
+                ttk.Separator(scan_prop_window, orient = 'horizontal').grid(row = 2 * idx + 1, column = 0, columnspan = 2, sticky = 'ew')
+
+            # button to close window
+            button_close = tk.Button(scan_prop_window, text='Close', width = 10, command=scan_prop_window.destroy)
+            button_close.grid(row = 2 * len(output_labels) + 1, column = 1, columnspan = 1)
+    
     def set_paths(self):
         """ Sets the currently input database and image directory paths
             Updates the scan dropdown menu according to database file contents """
         # connect to the currently selected database file
         conn = sqlite3.connect(self.e2.get())
         cur = conn.cursor()
+
+        # update scan and analysis input variables to default values since new db file was provided
+        self.ana_id_var.set('Select Choice')
+        self.scan_id_var.set('Select Choice')
 
         # sql queries used to retrieve scan info
         sql_cmd_scn = "SELECT * FROM Scans;" 
@@ -1108,8 +1258,15 @@ class Root:
         
     def scan_select(self, *args):
         """ Updates the analysis option menu when scan is selected from its dropdown """
-        # check if scan selection has occured yet
+        
+        # update analysis input variable to default, since new scan ID was selected
+        self.ana_id_var.set('Select Choice')
+        # disable running any functionality when Scan ID has not been selected yet 
         if self.scan_id_var.get() != 'Select Choice':
+            # set the location of the folder containing the scanned images for the chosen Scan ID
+            scans_directory = self.e1.get() + '/'
+            self.img_loc_var = scans_directory + 'Scan_' + f"{int(self.scan_id_var.get()):03d}"
+            
             # connect to the currently selected database file
             conn = sqlite3.connect(self.e2.get())
             cur = conn.cursor()
@@ -1128,6 +1285,8 @@ class Root:
             for string in self.analysis_options:
                 menu.add_command(label=string, 
                                  command=lambda value=string: self.ana_id_var.set(value))
+                
+        #self.disable_first_call += 1 # now iterate variable to allow functionality to proceed during next call
 
     def advanced_settings(self):
         """ Creates instance of advanced settings class """  
