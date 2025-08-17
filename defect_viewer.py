@@ -1,5 +1,6 @@
 # Added in defect binning based on defect class
 # Added buttons to mosaic to toggle between size defect binning and class defect binning
+# Also added in warning when no classes are found in chosen analysis
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -744,7 +745,7 @@ def defect_viewer(self):
             self.button_set_binning = None
             self.button_close = None
             
-            self.defect_type_data = mosaic_obj.defect_type_data[:,[0, 2]] # defect class IDs and names
+            self.defect_type_data = mosaic_obj.defect_type_data # defect class IDs and names according to chosen analysis
     
             # call for initial panel creation
             self.main_binning_window()
@@ -755,7 +756,7 @@ def defect_viewer(self):
             self.defect_binning_window = tk.Toplevel()
             self.defect_binning_window.title('Defect Class Binning')
 
-            self.row_num = len(mosaic_obj.mosaic_settings_obj.binning_colors) # dummy variable keeps track of number of defect binning ranges
+            self.row_num = len(self.defect_type_data) # dummy variable records number of defect classification bins
             self.list_of_entry_fields = np.empty((0,2)) # list to hold all entry variables for referencing
 
             # button to accept binning and send to main mosaic settings window
@@ -771,27 +772,36 @@ def defect_viewer(self):
             tk.Label(self.defect_binning_window, text='Bin Class Name').grid(row=1, column = 0, columnspan = 1)
         
             # populate with previously saved choices...
-            for i, type_entry in enumerate(self.defect_type_data):
-                if mosaic_obj.mosaic_settings_obj.binning_type_colors.size == 0:
-                    self.list_of_entry_fields = np.append(self.list_of_entry_fields,
-                                                [[tk.Label(self.defect_binning_window, text = type_entry[1]),
-                                                  tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window), width = 10)]],axis = 0)
-                else:
-                    self.list_of_entry_fields = np.append(self.list_of_entry_fields,
-                                                [[tk.Label(self.defect_binning_window, text = type_entry[1]),
-                                                  tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window, value = mosaic_obj.mosaic_settings_obj.binning_type_colors[i]), width = 10)]],axis = 0)    
-                self.list_of_entry_fields[-1][0].grid(row=i+2, column=0)
-                self.list_of_entry_fields[-1][1].grid(row=i+2, column=1)
+            # the number of entries is automatically set by the number of defect class names in the chosen analysis
+            # also check first if defect classes exist for chosen analysis ID
+            if self.defect_type_data.size == 0:
+                tk.Label(self.defect_binning_window, text='---NO CLASSES IN CHOSEN ANALYSIS---').grid(row=2, column = 0, columnspan = 2)
+            else:
+                for i, type_entry in enumerate(self.defect_type_data[:,[0, 2]]):
+                    if mosaic_obj.mosaic_settings_obj.binning_type_colors.size == 0:
+                        self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                                    [[tk.Label(self.defect_binning_window, text = type_entry[1]),
+                                                      tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window), width = 10)]],axis = 0)
+                    else:
+                        self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                                    [[tk.Label(self.defect_binning_window, text = type_entry[1]),
+                                                      tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window, value = mosaic_obj.mosaic_settings_obj.binning_type_colors[i]), width = 10)]],axis = 0)    
+                    self.list_of_entry_fields[-1][0].grid(row=i+2, column=0)
+                    self.list_of_entry_fields[-1][1].grid(row=i+2, column=1)
 
         def set_binning_options(self):
             """ Send current binning options back to MosaicSettings """
-            def get_var_value(x):
-                return x.get()
-            
-            # we vectorize a function to get values out of StringVar
-            vectorized = np.vectorize(get_var_value)
-            mosaic_obj.mosaic_settings_obj.binning_type_colors = vectorized(self.list_of_entry_fields[:,1:2]).flatten()
-            mosaic_obj.mosaic_settings_obj.which_binning_show = "CLASS"
+            # check first if defect classes exist for chosen analysis ID
+            if self.defect_type_data.size == 0:
+                return
+            else:
+                def get_var_value(x):
+                    return x.get()
+
+                # we vectorize a function to get values out of StringVar
+                vectorized = np.vectorize(get_var_value)
+                mosaic_obj.mosaic_settings_obj.binning_type_colors = vectorized(self.list_of_entry_fields[:,1:2]).flatten()
+                mosaic_obj.mosaic_settings_obj.which_binning_show = "CLASS"
     
     class MosaicSettings:
         """ Mosaic Settings Class """
@@ -1026,7 +1036,7 @@ def defect_viewer(self):
                     mark_color = self.binning_colors[bin_range_index]
                     
                 # set class-based defect mark color based on user binning input
-                if self.binning_type_colors.size == 0:
+                if self.binning_type_colors.size == 0 or self.defect_type_data.size == 0:
                     mark_type_color = self.inf_bin_color
                 else:
                     mark_type_color = self.binning_type_colors[np.where(self.defect_type_data[:,0:1].flatten() == def_row[15])][0]
