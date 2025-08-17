@@ -1,6 +1,5 @@
-# Added in defect binning based on defect class
-# Added buttons to mosaic to toggle between size defect binning and class defect binning
-# Also added in warning when no classes are found in chosen analysis
+# Added class defect binning to tile window
+# Added buttons to tile window to toggle between size defect binning and class defect binning
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -50,10 +49,13 @@ def defect_viewer(self):
         # variables passed from the instance of MosaicCreator
         # these variables must be adjusted back to initial values as defined in the MosaicCreator object each time a click event happens
         defect_binning_ranges = self.binning_ranges # binning ranges for defects, based on defect area
-        defect_binning_colors = self.binning_colors # binning colors for defects
+        defect_binning_colors = self.binning_colors # binning colors for defects based on defect area
+        defect_binning_type_colors = self.binning_type_colors # binning colors for defects based on defect classification
         defect_inf_bin_color = self.inf_bin_color # color for the defect bin which goes to infinity
         label_font_size = int(self.font_size_defect_label) # font size for defect labels
         defect_data = self.defect_data # array containing all relevant defect data
+        defect_type_data = self.defect_type_data # array containing relevant defect classification information
+        which_binning_show = self.which_binning_show # variable tells which defect binning to show by default
         image_data = self.image_data # array containing all relevant image data
         scan_properties = self.scan_properties # array containing information relevant to scan
         mos_tile_width = self.mos_tile_width # width and height of mosaic canvas tile
@@ -94,6 +96,8 @@ def defect_viewer(self):
                         """ Initialize the ImageFrame """
                         self.hide_defect_labels = None # tracks user's choice to display defect labels
                         self.hide_defect_marks = None # tracks user's choice to display defect marks
+                        # the which_binning_show variable passed from MosaicCreator must be updated to instance variable status 
+                        self.which_binning_show = which_binning_show # this allows active changes to this variable while tile is open
                         self.measure_choice = None # variable tracks user's choice of manual measurement on tile canvas
                         self.start_x = None # coordinates which aid in the class functions for drawing areas
                         self.start_y = None
@@ -301,15 +305,24 @@ def defect_viewer(self):
                                     x = float(def_row[4])*box_image[2]/float(img_row[9]) # coordinates of defect scaled by image size
                                     y = float(def_row[5])*box_image[3]/float(img_row[10]) # also converted to image pixels from microns
                                     scale = 30
+                                    
+                                    # we will plot multiple copies of each defect overlaid on each other
+                                    # each copy will have a different defect mark color for the different binning types we can choose
+                                    # then we can simply toggle the defect visibility to the user by using tags for each bin type
+
                                     bin_range_index = np.searchsorted(defect_binning_ranges, float(def_row[8])) # get index corresponding to binning range of defect area
-                                    # set defect mark color based on binning color corresponding to index found above
+                                    # set size-based defect mark color based on binning color corresponding to index found above
                                     if (bin_range_index > (len(defect_binning_ranges) - 1)) or (defect_binning_ranges.size == 0):
                                         bin_outline_color = defect_inf_bin_color
                                     else:
                                         bin_outline_color = defect_binning_colors[bin_range_index]
-                                    #self.canvas.create_oval(x-float(def_row[6])/2, y-float(def_row[7])/2, 
-                                    #                        x + float(def_row[6])/2, y + float(def_row[7])/2, 
-                                    #                        outline = bin_outline_color, fill = "", width = 2)
+                                        
+                                    # set class-based defect mark color based on user binning input
+                                    if defect_binning_type_colors.size == 0 or defect_type_data.size == 0:
+                                        mark_type_outline_color = defect_inf_bin_color
+                                    else:
+                                        mark_type_outline_color = defect_binning_type_colors[np.where(defect_type_data[:,0:1].flatten() == def_row[15])][0]
+                                    
                                     # ovals cannot be rotated in tkinter
                                     # convert oval coordinates to polygon and add in rotation defined by "Orientation" from database file
                                     # the factor of 2 multiplied on here ensures the oval encircles the entire defect
@@ -318,8 +331,30 @@ def defect_viewer(self):
                                     y0 = y - (float(def_row[6])*2)/2
                                     x1 = x + (float(def_row[7])*2)/2
                                     y1 = y + (float(def_row[6])*2)/2
+                                    
+                                    # now plot the defect on the mosaic, we plot multiple overlaid copies for each binning type
                                     self.canvas.create_polygon(tuple(self.__poly_oval_v2(x0, y0, x1, y1, 
-                                                rotation = float(def_row[12]))), outline = bin_outline_color, fill = "", width = 2, tags = "DEFECT_TILE_MARK")
+                                                rotation = float(def_row[12]))), outline = bin_outline_color, fill = "", width = 2, tags = "DEFECT_TILE_MARK_SIZE_BINNING")
+                                    self.canvas.create_polygon(tuple(self.__poly_oval_v2(x0, y0, x1, y1, 
+                                                rotation = float(def_row[12]))), outline = mark_type_outline_color, fill = "", width = 2, tags = "DEFECT_TILE_MARK_CLASS_BINNING")
+                                    self.canvas.itemconfigure("DEFECT_TILE_MARK_SIZE_BINNING", state="hidden")
+                                    self.canvas.itemconfigure("DEFECT_TILE_MARK_CLASS_BINNING", state="hidden")
+                                    
+                        # by default show the defect marks associated with the user's current choice on the mosaic
+                        if self.which_binning_show == "SIZE":
+                            self.canvas.itemconfigure("DEFECT_TILE_MARK_SIZE_BINNING", state="normal")
+                        if self.which_binning_show == "CLASS":
+                            self.canvas.itemconfigure("DEFECT_TILE_MARK_CLASS_BINNING", state="normal")
+                            
+                    def __toggle_binning(self, toggle_choice):
+                        """ Toggles visibility for the desired set of defect binning colors """
+                        self.which_binning_show = toggle_choice # we must update global variable for binning visibility
+                        if toggle_choice == "SIZE":
+                            self.canvas.itemconfigure("DEFECT_TILE_MARK_SIZE_BINNING", state="normal")
+                            self.canvas.itemconfigure("DEFECT_TILE_MARK_CLASS_BINNING", state="hidden")
+                        if toggle_choice == "CLASS":
+                            self.canvas.itemconfigure("DEFECT_TILE_MARK_SIZE_BINNING", state="hidden")
+                            self.canvas.itemconfigure("DEFECT_TILE_MARK_CLASS_BINNING", state="normal")
 
                     def __show_labels(self):
                         """ Plots defect labels on selected image """
@@ -348,9 +383,15 @@ def defect_viewer(self):
                     def __defect_mark_vis(self, *args):
                         """ Hides or reveals defect labels and/or marks when toggled """
                         if self.hide_defect_marks.get() == 1:
-                            self.canvas.itemconfig("DEFECT_TILE_MARK", state="hidden")
+                            self.canvas.itemconfig("DEFECT_TILE_MARK_SIZE_BINNING", state="hidden")
+                            self.canvas.itemconfig("DEFECT_TILE_MARK_CLASS_BINNING", state="hidden")
+                            #self.canvas.itemconfig("DEFECT_TILE_MARK", state="hidden")
                         else:
-                            self.canvas.itemconfig("DEFECT_TILE_MARK", state="normal")
+                            if self.which_binning_show == "SIZE":
+                                self.canvas.itemconfig("DEFECT_TILE_MARK_SIZE_BINNING", state="normal")
+                            if self.which_binning_show == "CLASS":
+                                self.canvas.itemconfig("DEFECT_TILE_MARK_CLASS_BINNING", state="normal")
+                            #self.canvas.itemconfig("DEFECT_TILE_MARK", state="normal")
                             
                         if self.hide_defect_labels.get() == 1:
                             self.canvas.itemconfig("DEFECT_TILE_LABEL", state="hidden")
@@ -428,7 +469,15 @@ def defect_viewer(self):
                         self.hide_defect_labels.trace('w', self.__defect_mark_vis) # call visibility function upon value change
                         checkbox_label_vis = tk.Checkbutton(self.__imframe, text='Hide Defect Labels', variable=self.hide_defect_labels)
                         checkbox_label_vis.grid(row = 3, column = 0, columnspan = 1, sticky = 'w')
-
+                        
+                        # button for toggling visibility of size-binned defect colors
+                        button_size_binning = tk.Button(self.__imframe, text='Size Binning', width = 10, command = lambda: self.__toggle_binning("SIZE"))
+                        button_size_binning.grid(row=4, column=0, sticky='w')
+            
+                        # button for toggling visibility of class-binned defect colors
+                        button_class_binning = tk.Button(self.__imframe, text='Class Binning', width = 10, command = lambda: self.__toggle_binning("CLASS"))
+                        button_class_binning.grid(row=5, column=0, sticky='w')
+                    
                     def __set_measure_choice(self, arg):
                         """ Set which kind of object to draw with the measuring tool """
                         self.measure_choice = arg
@@ -1059,7 +1108,7 @@ def defect_viewer(self):
                 
         def toggle_binning(self, toggle_choice):
             """ Toggles visibility for the desired set of defect binning colors """
-            self.which_binning_show == toggle_choice
+            self.which_binning_show = toggle_choice # we must update variable for binning visibility, bug fix
             if toggle_choice == "SIZE":
                 self.canvas.itemconfigure("DEFECT_MARK_SIZE_BINNING", state="normal")
                 self.canvas.itemconfigure("DEFECT_MARK_CLASS_BINNING", state="hidden")
