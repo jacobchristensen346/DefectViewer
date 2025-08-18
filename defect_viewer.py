@@ -1,5 +1,6 @@
-# Added class defect binning to tile window
-# Added buttons to tile window to toggle between size defect binning and class defect binning
+# fixed a bug where changing the analysis ID within the MosaicSettings window caused previous binning to be remembered and applied to new analysis
+# the above bug would cause error to be thrown and binning to break since analysis IDs may not have the same defect class names and number of bins
+# now where new analysis ID is chosen in MosaicSettings window, the binning is completely erased to be re-entered by user
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -793,8 +794,6 @@ def defect_viewer(self):
             self.list_of_entry_fields = None
             self.button_set_binning = None
             self.button_close = None
-            
-            self.defect_type_data = mosaic_obj.defect_type_data # defect class IDs and names according to chosen analysis
     
             # call for initial panel creation
             self.main_binning_window()
@@ -805,7 +804,7 @@ def defect_viewer(self):
             self.defect_binning_window = tk.Toplevel()
             self.defect_binning_window.title('Defect Class Binning')
 
-            self.row_num = len(self.defect_type_data) # dummy variable records number of defect classification bins
+            self.row_num = len(mosaic_obj.defect_type_data) # dummy variable records number of defect classification bins
             self.list_of_entry_fields = np.empty((0,2)) # list to hold all entry variables for referencing
 
             # button to accept binning and send to main mosaic settings window
@@ -823,10 +822,10 @@ def defect_viewer(self):
             # populate with previously saved choices...
             # the number of entries is automatically set by the number of defect class names in the chosen analysis
             # also check first if defect classes exist for chosen analysis ID
-            if self.defect_type_data.size == 0:
+            if mosaic_obj.defect_type_data.size == 0:
                 tk.Label(self.defect_binning_window, text='---NO CLASSES IN CHOSEN ANALYSIS---').grid(row=2, column = 0, columnspan = 2)
             else:
-                for i, type_entry in enumerate(self.defect_type_data[:,[0, 2]]):
+                for i, type_entry in enumerate(mosaic_obj.defect_type_data[:,[0, 2]]):
                     if mosaic_obj.mosaic_settings_obj.binning_type_colors.size == 0:
                         self.list_of_entry_fields = np.append(self.list_of_entry_fields,
                                                     [[tk.Label(self.defect_binning_window, text = type_entry[1]),
@@ -841,7 +840,7 @@ def defect_viewer(self):
         def set_binning_options(self):
             """ Send current binning options back to MosaicSettings """
             # check first if defect classes exist for chosen analysis ID
-            if self.defect_type_data.size == 0:
+            if mosaic_obj.defect_type_data.size == 0:
                 return
             else:
                 def get_var_value(x):
@@ -1039,9 +1038,19 @@ def defect_viewer(self):
             self.plot_mosaic()
 
         def update_analysis_info(self):
-            """ Function to update defect data """
+            """ Function to update defect data, called from MosaicSettings Class """
             self.defect_data = np.array(self.cur.execute(self.sql_cmd_def,(str(self.analysis_id),)).fetchall()) # fetch all data from defect table
             self.defect_type_data = np.array(self.cur.execute(self.sql_cmd_typ,(str(self.analysis_id),)).fetchall()) # fetch all data from detection class table
+
+            # we must reset all of the binning and colors in both MosaicCreator and MosaicSettings
+            # otherwise, if the MosaicSettings window is not closed between analysis ID changes the previous binning is remembered and applied to wrong analysis
+            self.binning_ranges = np.array([]) # update MosaicCreator binning
+            self.binning_colors = np.array([])
+            self.binning_type_colors = np.array([])
+            mosaic_obj.mosaic_settings_obj.binning_ranges = np.array([]) # update MosaicSettings binning
+            mosaic_obj.mosaic_settings_obj.binning_colors = np.array([])
+            mosaic_obj.mosaic_settings_obj.binning_type_colors = np.array([])
+            
             # now update the name of the window
             self.mosaic_window.title(self.sample_name + " || " + "Scan ID = " + str(scan_id) + " || " + "Analysis ID = " + str(self.analysis_id))
 
