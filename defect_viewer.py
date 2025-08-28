@@ -1,6 +1,6 @@
-# fixed a bug where changing the analysis ID within the MosaicSettings window caused previous binning to be remembered and applied to new analysis
-# the above bug would cause error to be thrown and binning to break since analysis IDs may not have the same defect class names and number of bins
-# now where new analysis ID is chosen in MosaicSettings window, the binning is completely erased to be re-entered by user
+# changed defect area binning to not clear when new analysis ID is selected, since this is not necessary to do
+# fixed analysis ID dropdown in root menu not clearing when new filepaths are set
+# added in user error checks at root window before mosaic is plotted
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -1042,13 +1042,10 @@ def defect_viewer(self):
             self.defect_data = np.array(self.cur.execute(self.sql_cmd_def,(str(self.analysis_id),)).fetchall()) # fetch all data from defect table
             self.defect_type_data = np.array(self.cur.execute(self.sql_cmd_typ,(str(self.analysis_id),)).fetchall()) # fetch all data from detection class table
 
-            # we must reset all of the binning and colors in both MosaicCreator and MosaicSettings
+            # we must reset defect classification binning in both MosaicCreator and MosaicSettings
             # otherwise, if the MosaicSettings window is not closed between analysis ID changes the previous binning is remembered and applied to wrong analysis
-            self.binning_ranges = np.array([]) # update MosaicCreator binning
-            self.binning_colors = np.array([])
+            # we can leave area binning alone since it can apply in any analysis
             self.binning_type_colors = np.array([])
-            mosaic_obj.mosaic_settings_obj.binning_ranges = np.array([]) # update MosaicSettings binning
-            mosaic_obj.mosaic_settings_obj.binning_colors = np.array([])
             mosaic_obj.mosaic_settings_obj.binning_type_colors = np.array([])
             
             # now update the name of the window
@@ -1248,7 +1245,7 @@ class Root:
         """ Create the main root panel """
         
         self.root = tk.Tk()
-        self.root.title('Defect Viewer v1.0')
+        self.root.title('Defect Viewer v1.5')
 
         # create variables for input in Root gui
         self.scan_dir_var = tk.StringVar() # path to folder containing all scan folders
@@ -1316,10 +1313,18 @@ class Root:
         # button_plot = tk.Button(self.root, text='Plot', width = 10,  
         #                         command = lambda arg = self.img_loc_var, arg1 = self.db_file_var, arg2 = self.scan_id_var, 
         #                         arg3 = self.ana_id_var, arg4 = self.image_scale_var: defect_viewer(self, arg, arg1, arg2, arg3, arg4))
-        button_plot = tk.Button(self.root, text='Plot', width = 10, command = lambda: defect_viewer(self))
+        button_plot = tk.Button(self.root, text='Plot', width = 10, command =  self.call_defect_viewer)
         button_close = tk.Button(self.root, text='Close', width = 10, command=self.root.destroy)
         button_plot.grid(row = 6, column = 4, columnspan = 1)
         button_close.grid(row = 7, column = 4, columnspan = 1)
+    
+    def call_defect_viewer(self):
+        """ Calls the defect_viewer function which initiates mosaic plotting """
+        # check that all required fields are filled
+        if self.ana_id_var.get() == 'Select Choice' or self.scan_id_var.get() == 'Select Choice' or not self.image_scale_var.get().isdigit():
+            print('Please select a Scan ID, Analysis ID, and enter an integer for Image Scale before plotting')
+        else:
+            defect_viewer(self)
 
     def analysis_props(self):
         """ Displays analysis properties from currently selected analysis ID """
@@ -1413,13 +1418,30 @@ class Root:
     def set_paths(self):
         """ Sets the currently input database and image directory paths
             Updates the scan dropdown menu according to database file contents """
-        # connect to the currently selected database file
-        conn = sqlite3.connect(self.e2.get())
-        cur = conn.cursor()
-
+        
         # update scan and analysis input variables to default values since new db file was provided
         self.ana_id_var.set('Select Choice')
         self.scan_id_var.set('Select Choice')
+        
+        # ensure the analysis and scan ID option menus are cleared of any options from previously entered paths
+        self.e4["menu"].delete(0, "end")
+        scan_menu = self.e3["menu"]
+        scan_menu.delete(0, "end")
+        
+        # check that the inputs are valid
+        if self.e1.get() == '' or self.e2.get() == '':
+            print('Please fill out filepath fields first')
+            return
+        if not any(x.startswith('Scan_') for x in os.listdir(self.e1.get() + '/')):
+            print('Scans Directory must contain image folders with naming convention \'Scan_XXX\'')
+            return
+        if self.e2.get().split('.db')[0].split('/')[-1] != self.e1.get().split('/')[-1]:
+            print('WARNING: Scans Directory and Database File names do not match one another')
+            print('Consider reviewing selections before proceeding, or error may occur')
+        
+        # connect to the currently selected database file
+        conn = sqlite3.connect(self.e2.get())
+        cur = conn.cursor()
 
         # sql queries used to retrieve scan info
         sql_cmd_scn = "SELECT * FROM Scans;" 
@@ -1432,10 +1454,8 @@ class Root:
         self.scan_options = scans_info[:,0]
         
         # update the scan ID option menu with choices
-        menu = self.e3["menu"]
-        menu.delete(0, "end")
         for string in self.scan_options:
-            menu.add_command(label=string, 
+            scan_menu.add_command(label=string, 
                              command=lambda value=string: self.scan_id_var.set(value))
         
     def scan_select(self, *args):
