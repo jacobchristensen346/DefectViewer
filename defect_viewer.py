@@ -1,4 +1,4 @@
-# test merge called v1.5.1
+# test merge called v1.5.2
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
