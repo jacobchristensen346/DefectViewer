@@ -1,6 +1,4 @@
-# changed defect area binning to not clear when new analysis ID is selected, since this is not necessary to do
-# fixed analysis ID dropdown in root menu not clearing when new filepaths are set
-# added in user error checks at root window before mosaic is plotted
+# test merge called v1.5.1
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
