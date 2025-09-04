@@ -1,4 +1,6 @@
-# test merge called v1.5.2
+# added new class for use in root called DefectSizeBinningRoot
+# DefectSizeBinningRoot adds functionality for selecting default colors and ranges for defect size binning
+# default settings are applied to all mosaics plotted from root window during app session
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -31,14 +33,18 @@ Images are output in a mosaic with defects overlaid
 """
     
 def defect_viewer(self):
-    """Contains all the functionality of the app
-    Only activates once inputs selected in gui"""
-    image_origin = self.img_loc_var + '/' # Here we gather our variables of interest entered into the gui
+    """ Contains all the functionality of the app post root window
+    Activates once mosaic is plotted from root window gui """
+    image_origin = self.img_loc_var + '/' # Here we gather our variables of interest entered into the root window gui
     db_origin = self.db_file_var.get()
     scan_id = self.scan_id_var.get()
     analysis_id = self.ana_id_var.get()
     image_scale = int(self.image_scale_var.get())
     image_view_only = self.image_view_only.get()
+    # set the default binning ranges and colors to those received by the root window
+    default_binning_ranges = self.binning_ranges
+    default_binning_colors = self.binning_colors
+    default_inf_bin_color = self.inf_bin_color
  
     def clicked(self, event):
         """ Contains all functionality to support click event
@@ -988,10 +994,14 @@ def defect_viewer(self):
             # initialize variables to default values, may be overwritten by advanced mosaic settings
             self.font_size_defect_label = "20"
             self.defect_mark_size = "3"
-            self.binning_ranges = np.array([]) # the desired binning ranges and colors are passed from DefectBinning to MosaicSettings to MosaicCreator
-            self.binning_colors = np.array([]) 
-            self.binning_type_colors = np.array([]) # colors for defect classification binning
-            self.inf_bin_color = 'red'
+            
+            # set the ranges and colors for defect size binning to the default received by the root object
+            # this may be overwritten by the mosaic settings
+            self.binning_ranges = default_binning_ranges 
+            self.binning_colors = default_binning_colors 
+            self.inf_bin_color = default_inf_bin_color
+            
+            self.binning_type_colors = np.array([]) # colors for defect classification binning (no default unlike size binning)
             self.which_binning_show = 'SIZE' # determines which color binning to show
             # this array keeps track of the defect info which will be output on the defect label text line
             self.defect_label_text_choices = np.array([False, False, False, False, True, True, False, False, True, False,
@@ -1004,7 +1014,7 @@ def defect_viewer(self):
             # retrieve user choice of viewing image only (no defect plotting)
             self.image_view_only = root_obj.image_view_only.get()
             
-            # instance variable initialization
+            # more instance variable initializations
             self.canvas = None
             self.images = None
             self.mosaic_settings_obj = None
@@ -1185,12 +1195,118 @@ def defect_viewer(self):
     mosaic_obj = MosaicCreator()
     mosaic_obj.mosaic_window.mainloop()
 
+class DefectSizeBinningRoot:
+    """ Class for selecting default colors and ranges for defect size binning
+        Will be applied to all mosaics plotted from root window """
+    def __init__(self):       
+        # instance variable initialization
+        self.defect_binning_window = None
+        self.row_num = None
+        self.list_of_entry_fields = None
+        self.button_set_binning = None
+        self.button_close = None
+        self.inf_bin_color = None
+
+        # call for initial panel creation
+        self.main_binning_window()
+
+    def main_binning_window(self):
+        """ Create defect binning settings panel """
+        # create the defect binning tkinter window
+        self.defect_binning_window = tk.Toplevel()
+        self.defect_binning_window.title('Defect Size Binning')
+
+        self.row_num = len(root_obj.root_settings_obj.binning_colors) # dummy variable keeps track of number of defect binning ranges
+        self.list_of_entry_fields = np.empty((0,2)) # list to hold all entry variables for referencing
+
+        # button used to add another defect binning range
+        button_add_range = tk.Button(self.defect_binning_window, text='Add Range', width = 11, command = self.add_binning_range)
+        button_add_range.grid(row = 0, column = 0)
+
+        # button to remove defect binning range
+        button_remove_range = tk.Button(self.defect_binning_window, text='Remove Range', width = 11, command = self.remove_binning_range)
+        button_remove_range.grid(row = 0, column = 1)
+
+        # button to accept binning and send to main mosaic settings window
+        self.button_set_binning = tk.Button(self.defect_binning_window, text='Set Binning', width = 10, command = self.set_binning_options)
+        self.button_set_binning.grid(row = self.row_num + 2, column = 3)
+
+        # button to close window without setting new binning
+        self.button_close = tk.Button(self.defect_binning_window, text='Close', width = 10, command=self.defect_binning_window.destroy)
+        self.button_close.grid(row = self.row_num + 3, column = 3)
+
+        # labels for the two columns, binning ceiling value and binning color value
+        tk.Label(self.defect_binning_window, text='Bin Ceiling').grid(row=1, column = 0, columnspan = 1)
+        tk.Label(self.defect_binning_window, text='Bin Color').grid(row=1, column = 1, columnspan = 1)
+
+        # add in infinity bin (bin that starts at final finite bin ceiling and goes to infinity)
+        self.inf_bin_color = tk.Entry(self.defect_binning_window, 
+                                      textvariable = tk.StringVar(self.defect_binning_window, value = root_obj.root_settings_obj.inf_bin_color), width = 8)
+        tk.Label(self.defect_binning_window, text='Infinity Bin Color').grid(row=0, column = 3, columnspan = 1)
+        self.inf_bin_color.grid(row=0, column=4)
+
+        # populate with previously saved choices...
+        for i in range(self.row_num):
+            self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                        [[tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window, value = root_obj.root_settings_obj.binning_ranges[i]), width = 10),
+                                          tk.Entry(self.defect_binning_window, textvariable = tk.StringVar(self.defect_binning_window, value = root_obj.root_settings_obj.binning_colors[i]), width = 10)]],axis = 0)
+            self.list_of_entry_fields[-1][0].grid(row=i+2, column=0)
+            self.list_of_entry_fields[-1][1].grid(row=i+2, column=1)
+
+    def add_binning_range(self):
+        """ Adds a new defect binning range entry """
+        # iterate the number of fields we have
+        self.row_num = self.row_num + 1
+
+        self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                        [[tk.Entry(self.defect_binning_window, width = 10),
+                                          tk.Entry(self.defect_binning_window, width = 10)]],axis = 0)
+
+        # after appending we can use -1 to reference the last item appened
+        self.list_of_entry_fields[-1][0].grid(row=self.row_num + 1, column=0)
+        self.list_of_entry_fields[-1][1].grid(row=self.row_num + 1, column=1)
+        # now update the location of the accept and close buttons
+        self.button_set_binning.grid(row = self.row_num + 2, column = 3)
+        self.button_close.grid(row = self.row_num + 3, column = 3)
+
+    def remove_binning_range(self):
+        """ Removes most recent defect binning range entry """
+        if len(self.list_of_entry_fields) > 0:
+            (self.defect_binning_window.winfo_children()[-1]).destroy()
+            (self.defect_binning_window.winfo_children()[-1]).destroy()
+            # update the number of fields
+            self.list_of_entry_fields = self.list_of_entry_fields[:-1]
+            self.row_num = self.row_num - 1
+            # now update the location of the accept and close buttons
+            self.button_set_binning.grid(row = self.row_num + 2, column = 3)
+            self.button_close.grid(row = self.row_num + 3, column = 3)
+        else:
+            print('No binning ranges to remove')
+
+    def set_binning_options(self):
+        """ Send current binning options back to MosaicSettings """
+        def get_var_value(x):
+            return x.get()
+
+        # we vectorize a function to get values out of StringVar
+        vectorized = np.vectorize(get_var_value)
+        if self.list_of_entry_fields.size == 0:
+            root_obj.root_settings_obj.binning_ranges = np.array([])
+            root_obj.root_settings_obj.binning_colors = np.array([])
+        else:
+            root_obj.root_settings_obj.binning_ranges = vectorized(self.list_of_entry_fields[:,0:1]).flatten().astype(float)
+            root_obj.root_settings_obj.binning_colors = vectorized(self.list_of_entry_fields[:,1:2]).flatten()
+        root_obj.root_settings_obj.inf_bin_color = self.inf_bin_color.get()
+    
 class RootSettings:
     """ Advanced Settings Class for Root Window """ 
     def __init__(self):
         
         # instance variable initialization
         self.adv_window = None
+        self.binning_colors = root_obj.binning_colors # set the colors and ranges for size binning to the root initially
+        self.binning_ranges = root_obj.binning_ranges
+        self.inf_bin_color = root_obj.inf_bin_color
         
         # call initial panel function
         self.initial_panel_root()
@@ -1199,19 +1315,27 @@ class RootSettings:
         """ Create initial advanced settings panel from the Root window """   
         self.adv_window = tk.Toplevel()
         self.adv_window.title('Advanced Settings')
-
-        tk.Label(self.adv_window, text='No settings here yet').grid(row=0, column = 0, columnspan = 1)
+        
+        # button to open window used to modify default size binning applied to all mosaics plotted from root
+        button_defect_binning = tk.Button(self.adv_window, text='Default Size Binning', width = 17, command = self.call_defect_binning_root)
+        button_defect_binning.grid(row = 0, column = 0)
 
         button_accept = tk.Button(self.adv_window, text='Accept', width = 10, command = self.return_choices_root)
         button_accept.grid(row = 1, column = 3)
 
         button_close = tk.Button(self.adv_window, text='Close', width = 10, command=self.adv_window.destroy)
         button_close.grid(row = 2, column = 3)
-        
+    
+    def call_defect_binning_root(self):
+            """ Creates instance of DefectSizeBinningRoot class """
+            self.defect_binning_obj = DefectSizeBinningRoot()
+            
     def return_choices_root(self):
-        """ Sends input settings back to Root """     
-        pass
-
+        """ Sends input settings back to Root """
+        root_obj.binning_ranges = self.binning_ranges
+        root_obj.binning_colors = self.binning_colors
+        root_obj.inf_bin_color = self.inf_bin_color
+         
 class Root:
     """ Class to create initial Root gui window """
     def __init__(self):
@@ -1234,6 +1358,11 @@ class Root:
         self.image_view_only = None
         self.scan_options = np.array(['Select Choice'])
         self.analysis_options = np.array(['Select Choice'])
+        # colors and ranges for defect size binning, here set to some arbitrary values
+        # can be modified in root settings window and act as defaults that are passed to the mosaic object upon plotting
+        self.binning_ranges = np.array([16000, 32000, 64000, 112000, 160000])
+        self.binning_colors = np.array(['aqua', 'chartreuse3', 'royalblue3', 'goldenrod1', 'magenta3'])
+        self.inf_bin_color = 'red'
         #self.disable_first_call = 0 # this variable ensures the scan_choice function is not called upon scan_id_var initialization
         
         # call function to create main panel
