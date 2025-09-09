@@ -1,8 +1,5 @@
-# Defect Viewer Version 1.6.1
-# Added in new button on mosaic window which opens a new window 
-# New window displays analysis statistics
-# Currently displays the binning colors/names and defect number for each bin
-# Implemented for both size and class-based defect binning
+# Defect Viewer Version 1.6.2
+# fixed colors not displaying correctly for size binning in analysis statistics window
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -1160,10 +1157,10 @@ def defect_viewer(self):
                 # iterate through all the ranges/colors and create labels for each
                 for i in range(len(self.binning_colors)):
                     tk.Label(ana_stats_window, text=str(self.binning_ranges[i])).grid(row=i+2, column = 0)
-                    tk.Label(ana_stats_window, text=str(self.binning_colors[i])).grid(row=i+2, column = 1)
+                    tk.Label(ana_stats_window, text=str(self.binning_colors[i]), fg=str(self.binning_colors[i])).grid(row=i+2, column = 1)
                     tk.Label(ana_stats_window, text=str(int(self.num_defects_size_binning[i]))).grid(row=i+2, column = 2)
                 tk.Label(ana_stats_window, text="Infinity").grid(row=len(self.binning_colors)+3, column = 0)
-                tk.Label(ana_stats_window, text=str(self.inf_bin_color)).grid(row=len(self.binning_colors)+3, column = 1)
+                tk.Label(ana_stats_window, text=str(self.inf_bin_color), fg=str(self.inf_bin_color)).grid(row=len(self.binning_colors)+3, column = 1)
                 tk.Label(ana_stats_window, text=str(int(self.num_defects_size_binning[-1]))).grid(row=len(self.binning_colors)+3, column = 2)
     
                 # button to close window
