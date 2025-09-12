@@ -1,10 +1,11 @@
-# Defect Viewer Version 1.6.2
-# fixed colors not displaying correctly for size binning in analysis statistics window
+# Defect Viewer Version 1.6.3
+# Added in new button on root window which opens instructions manual
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
 from tkinter import ttk
 from tkinter import filedialog
+from tkPDFViewer import tkPDFViewer as pdf
 
 import math
 import numpy as np
@@ -1437,7 +1438,7 @@ class Root:
         """ Create the main root panel """
         
         self.root = tk.Tk()
-        self.root.title('Defect Viewer v1.6.1')
+        self.root.title('Defect Viewer v1.6.3')
 
         # create variables for input in Root gui
         self.scan_dir_var = tk.StringVar() # path to folder containing all scan folders
@@ -1450,6 +1451,10 @@ class Root:
         # initialize advanced settings variables to default values
         # will be overwritten by user input if desired
         self.font_size_input = tk.StringVar(self.root, value = '6')
+
+        # button to open embedded pdf of software manual
+        button_open_instruct = tk.Button(self.root, text='?', width = 3, command=self.open_instructions)
+        button_open_instruct.grid(row = 0, column = 4, columnspan = 1, sticky = 'e')
         
         # text field to enter location of directory containing scan folders
         tk.Label(self.root, text='Scans Directory').grid(row = 0, column = 0, columnspan = 1)
@@ -1509,6 +1514,22 @@ class Root:
         button_close = tk.Button(self.root, text='Close', width = 10, command=self.root.destroy)
         button_plot.grid(row = 6, column = 4, columnspan = 1)
         button_close.grid(row = 7, column = 4, columnspan = 1)
+        
+    def open_instructions(self):
+        """ Displays an embedded pdf of the instruction manual """
+        instruct_window = tk.Toplevel()
+        instruct_window.geometry("700x780")
+        instruct_window.title('Instruction Manual')
+        
+        # Create an object of Class ShowPdf
+        v1 = pdf.ShowPdf()
+        
+        # Add the PDF to the GUI
+        # simultaneously we capture the image array and save it to an instance variable to avoid garbage collection
+        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location=r"C:/Users/JChristensen01/Downloads/Anneal Prep Traveler Changes.pdf", width=700, height=500)
+        
+        # Pack the PDF viewer in the GUI
+        v2.pack(pady=10)
     
     def call_defect_viewer(self):
         """ Calls the defect_viewer function which initiates mosaic plotting """
