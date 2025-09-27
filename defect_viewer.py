@@ -1,11 +1,18 @@
-# Defect Viewer Version 1.6.3
-# Added in new button on root window which opens instructions manual
+# Defect Viewer Version 1.6.4
+# fixed bug with circle and line marker tools where length and area labels were in pixels instead of microns
+# Added in new class called ShowPdf which converts pdf to scrollable image in tkinter (previously imported as module)
+# ShowPdf is part of python module found here https://github.com/Roshanpaswan/tkPDFViewer.git
+# Modifications were made since module was out-of-date
+# Summary of changes to ShowPdf...
+# Added __init__ function to ShowPdf class, moved img_object_li instance variable into __init__ function. This aids in garbage-collection avoidance upon reruns of code.
+# Added explicit anchor argument to self.display_msg = Label(master, textvariable=percentage_load)
+# Added new variable returned upon exit of pdf_view() function (self.img_object_li). This allows capture of image array which aids in garbage collection avoidance.
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
 from tkinter import ttk
 from tkinter import filedialog
-from tkPDFViewer import tkPDFViewer as pdf
+import fitz
 
 import math
 import numpy as np
@@ -22,6 +29,7 @@ import argparse
 import shutil
 import warnings
 import time
+from threading import Thread
 
 Image.MAX_IMAGE_PIXELS = None
 
@@ -521,9 +529,13 @@ def defect_viewer(self):
                                                         self.canvas.canvasx(event.x) + (radius - (self.canvas.canvasx(event.x)-self.start_x)), 
                                                         self.canvas.canvasy(event.y) + (radius - (self.canvas.canvasy(event.y) - self.start_y)), 
                                                         outline='red', tags="final_area_circle")
-
-                                # area of circle, scaled according to the current image magnification
-                                scaled_radius = radius / self.imscale
+                                
+                                # now we calculate the area to be displayed next to the circle marker on the canvas
+                                # convert x and y to microns using image size in pixels vs microns
+                                # also, scale according to the current image magnification
+                                micron_radius = (((self.canvas.canvasx(event.x) - self.start_x)*(float(img_row[9])/float(img_row[11])))**2 
+                                          + ((self.canvas.canvasy(event.y) - self.start_y)*(float(img_row[10])/float(img_row[12])))**2)**0.5
+                                scaled_radius = (micron_radius / self.imscale)
                                 area = (np.pi*scaled_radius**2)
 
                                 # create area label, which uses the same font size as defect labels for now
@@ -540,10 +552,15 @@ def defect_viewer(self):
                         elif self.measure_choice == "Line":
                             if self.start_x is not None and self.start_y is not None:
                                 self.canvas.delete("temp_line")
-                                # length of drawn line, scale according to current image magnification
-                                length = (((self.canvas.canvasx(event.x) - self.start_x)**2 + (self.canvas.canvasy(event.y) - self.start_y)**2)**0.5) / self.imscale
+                                # create the line on the canvas
                                 self.canvas.create_line(self.start_x, self.start_y, self.canvas.canvasx(event.x), self.canvas.canvasy(event.y),
                                                         fill='red', width = 2, tags="final_line_length")
+                                
+                                # now we find the length of the line in microns using image size in pixels vs microns
+                                # we also scale according to current image magnification
+                                micron_length = (((self.canvas.canvasx(event.x) - self.start_x)*(float(img_row[9])/float(img_row[11])))**2 
+                                          + ((self.canvas.canvasy(event.y) - self.start_y)*(float(img_row[10])/float(img_row[12])))**2)**0.5
+                                scaled_length = (micron_length / self.imscale)
 
                                 # create text label, which uses the same font size as defect labels for now
                                 # check if new font size applied due to zoom, if not apply default font size
@@ -551,7 +568,7 @@ def defect_viewer(self):
                                     line_font_size = label_font_size
                                 else:
                                     line_font_size = self.__new_font_size
-                                self.canvas.create_text(self.start_x, self.start_y, text=("Length = " + str(length)), 
+                                self.canvas.create_text(self.start_x, self.start_y, text=("Length = " + str(scaled_length)), 
                                                             font=("Arial", -line_font_size), tags = ("text", "final_line_length"))
                                 self.start_x = None
                                 self.start_y = None
@@ -1438,7 +1455,7 @@ class Root:
         """ Create the main root panel """
         
         self.root = tk.Tk()
-        self.root.title('Defect Viewer v1.6.3')
+        self.root.title('Defect Viewer v1.6.4')
 
         # create variables for input in Root gui
         self.scan_dir_var = tk.StringVar() # path to folder containing all scan folders
@@ -1522,11 +1539,11 @@ class Root:
         instruct_window.title('Instruction Manual')
         
         # Create an object of Class ShowPdf
-        v1 = pdf.ShowPdf()
+        v1 = ShowPdf()
         
         # Add the PDF to the GUI
         # simultaneously we capture the image array and save it to an instance variable to avoid garbage collection
-        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location=r"C:/Users/JChristensen01/Downloads/Anneal Prep Traveler Changes.pdf", width=700, height=500)
+        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location=r"C:\\Users\\Jacob\\Downloads\\Canon 3000iW opsmanual.pdf", width=700, height=500)
         
         # Pack the PDF viewer in the GUI
         v2.pack(pady=10)
@@ -1718,6 +1735,83 @@ class Root:
         directory_name =filedialog.askdirectory()
         self.e1.delete(0, 'end')
         self.e1.insert(tk.END, directory_name)
+        
+class ShowPdf():
+    """ Imports PDF as scrollable image into tkinter  
+    
+    Summary of changes made by jacobchristensen346 to tkPDFViewer (https://github.com/Roshanpaswan/tkPDFViewer.git) 
+
+    - Added __init__ function to ShowPdf class, moved img_object_li instance variable into __init__ function. This aids in garbage-collection avoidance upon reruns of code.
+    - Added explicit anchor argument to self.display_msg = Label(master, textvariable=percentage_load)
+    - Added new variable returned upon exit of pdf_view() function (self.img_object_li). This allows capture of image array which aids in garbage collection avoidance.
+
+    """
+
+    #img_object_li = []
+    def __init__(self):
+        self.img_object_li = []
+
+    def pdf_view(self, master, width = 1200, height = 600, pdf_location = "", bar = True, load = "after"):
+
+        self.frame = tk.Frame(master, width = width, height = height, bg = "white")
+
+        scroll_y = tk.Scrollbar(self.frame, orient = "vertical")
+        scroll_x = tk.Scrollbar(self.frame, orient = "horizontal")
+
+        scroll_x.pack(fill = "x", side = "bottom")
+        scroll_y.pack(fill = "y", side = "right")
+
+        percentage_view = 0
+        percentage_load = tk.StringVar()
+
+        if bar == True and load == "after":
+            self.display_msg = tk.Label(master, textvariable = percentage_load)
+            self.display_msg.pack(pady = 10)
+
+            loading = ttk.Progressbar(self.frame, orient = tk.HORIZONTAL, length = 100, mode = 'determinate')
+            loading.pack(side = tk.TOP, fill = tk.X)
+
+        self.text = tk.Text(self.frame, yscrollcommand = scroll_y.set, xscrollcommand = scroll_x.set, width = width, height = height)
+        self.text.pack(side = "left")
+
+        scroll_x.config(command = self.text.xview)
+        scroll_y.config(command = self.text.yview)
+
+        def add_img():
+            precentage_dicide = 0
+            open_pdf = fitz.open(pdf_location)
+
+            for page in open_pdf:
+                pix = page.get_pixmap()
+                pix1 = fitz.Pixmap(pix, 0) if pix.alpha else pix
+                img = pix1.tobytes("ppm")
+                timg = ImageTk.PhotoImage(data = img)
+                self.img_object_li.append(timg)
+                if bar == True and load == "after":
+                    precentage_dicide = precentage_dicide + 1
+                    percentage_view = (float(precentage_dicide)/float(len(open_pdf))*float(100))
+                    loading['value'] = percentage_view
+                    percentage_load.set(f"Please wait, the instruction manual is loading... {int(math.floor(percentage_view))}%")
+            if bar == True and load == "after":
+                loading.pack_forget()
+                self.display_msg.pack_forget()
+
+            for i in self.img_object_li:
+                self.text.image_create(tk.END,image = i)
+                self.text.insert(tk.END, "\n\n")
+            self.text.configure(state = "disabled")
+
+
+        def start_pack():
+            t1 = Thread(target = add_img)
+            t1.start()
+
+        if load == "after":
+            master.after(250, start_pack)
+        else:
+            start_pack()
+       
+        return self.frame, self.img_object_li
 
 if __name__ == "__main__": 
     root_obj = Root()
