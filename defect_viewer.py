@@ -1,12 +1,5 @@
-# Defect Viewer Version 1.6.4
-# fixed bug with circle and line marker tools where length and area labels were in pixels instead of microns
-# Added in new class called ShowPdf which converts pdf to scrollable image in tkinter (previously imported as module)
-# ShowPdf is part of python module found here https://github.com/Roshanpaswan/tkPDFViewer.git
-# Modifications were made since module was out-of-date
-# Summary of changes to ShowPdf...
-# Added __init__ function to ShowPdf class, moved img_object_li instance variable into __init__ function. This aids in garbage-collection avoidance upon reruns of code.
-# Added explicit anchor argument to self.display_msg = Label(master, textvariable=percentage_load)
-# Added new variable returned upon exit of pdf_view() function (self.img_object_li). This allows capture of image array which aids in garbage collection avoidance.
+# Defect Viewer Version 1.6.5
+# Changed instruction manual pdf location path
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
