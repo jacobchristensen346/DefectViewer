@@ -1543,7 +1543,7 @@ class Root:
         
         # Add the PDF to the GUI
         # simultaneously we capture the image array and save it to an instance variable to avoid garbage collection
-        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location=r"C:\\Users\\Jacob\\Downloads\\Canon 3000iW opsmanual.pdf", width=700, height=500)
+        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location="\\\\cam-vpnap-nas1\\nSpec\\Defect Viewer App\\v1.0\\defect_viewer_v1.0_tutorial.pdf", width=700, height=500)
         
         # Pack the PDF viewer in the GUI
         v2.pack(pady=10)
