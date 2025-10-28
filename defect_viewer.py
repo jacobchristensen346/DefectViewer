@@ -1,12 +1,5 @@
-# Defect Viewer Version 1.6.4
-# fixed bug with circle and line marker tools where length and area labels were in pixels instead of microns
-# Added in new class called ShowPdf which converts pdf to scrollable image in tkinter (previously imported as module)
-# ShowPdf is part of python module found here https://github.com/Roshanpaswan/tkPDFViewer.git
-# Modifications were made since module was out-of-date
-# Summary of changes to ShowPdf...
-# Added __init__ function to ShowPdf class, moved img_object_li instance variable into __init__ function. This aids in garbage-collection avoidance upon reruns of code.
-# Added explicit anchor argument to self.display_msg = Label(master, textvariable=percentage_load)
-# Added new variable returned upon exit of pdf_view() function (self.img_object_li). This allows capture of image array which aids in garbage collection avoidance.
+# Defect Viewer Version 1.6.5
+# Changed instruction manual pdf location path
 
 import tkinter as tk
 from tkinter import Tk, Canvas, mainloop
@@ -1455,7 +1448,7 @@ class Root:
         """ Create the main root panel """
         
         self.root = tk.Tk()
-        self.root.title('Defect Viewer v1.6.4')
+        self.root.title('Defect Viewer v1.6.5')
 
         # create variables for input in Root gui
         self.scan_dir_var = tk.StringVar() # path to folder containing all scan folders
@@ -1543,7 +1536,7 @@ class Root:
         
         # Add the PDF to the GUI
         # simultaneously we capture the image array and save it to an instance variable to avoid garbage collection
-        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location=r"C:\\Users\\Jacob\\Downloads\\Canon 3000iW opsmanual.pdf", width=700, height=500)
+        v2, self.save_pdf_imgs = v1.pdf_view(instruct_window, pdf_location="\\\\cam-vpnap-nas1\\nSpec\\Defect Viewer App\\v1.0\\defect_viewer_v1.0_tutorial.pdf", width=700, height=500)
         
         # Pack the PDF viewer in the GUI
         v2.pack(pady=10)
