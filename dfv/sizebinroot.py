@@ -1,0 +1,108 @@
+# Root Size Binning imports
+import tkinter as tk
+import numpy as np
+
+class DefectSizeBinningRoot:
+    """ Class for selecting default colors and ranges for defect size binning
+        Will be applied to all mosaics plotted from root window """
+    def __init__(self, root_settings):     
+        
+        self.root_settings = root_settings  # DefectSizeBinningRoot instance holds RootSettings instance
+        
+        # instance variable initialization
+        self.defect_binning_window = None  # variable for the tk window
+        self.row_num = None  # will track the current number of binning rows
+        self.list_of_entry_fields = None  # list of tk Entry object
+        self.button_set_binning = None  # button to set binning options
+        self.button_close = None  # button to close without setting values
+        self.inf_bin_color = None  # infinity bin color
+
+        self.main_binning_window()  # call for initial panel creation
+
+    def main_binning_window(self):
+        """ Create defect binning settings panel """
+        # create the defect binning tkinter window
+        self.defect_binning_window = tk.Toplevel()
+        self.defect_binning_window.title('Defect Size Binning')
+
+        self.row_num = len(self.root_settings.binning_colors)  # dummy variable keeps track of number of defect binning ranges
+        self.list_of_entry_fields = np.empty((0, 2))  # list to hold all entry variables for referencing
+
+        # button used to add another defect binning range
+        button_add_range = tk.Button(self.defect_binning_window, text='Add Range', width=11, command=self.add_binning_range)
+        button_add_range.grid(row=0, column=0)
+
+        # button to remove defect binning range
+        button_remove_range = tk.Button(self.defect_binning_window, text='Remove Range', width=11, command=self.remove_binning_range)
+        button_remove_range.grid(row=0, column=1)
+
+        # button to accept binning and send to main mosaic settings window
+        self.button_set_binning = tk.Button(self.defect_binning_window, text='Set Binning', width=10, command=self.set_binning_options)
+        self.button_set_binning.grid(row=self.row_num + 2, column=3)
+
+        # button to close window without setting new binning
+        self.button_close = tk.Button(self.defect_binning_window, text='Close', width=10, command=self.defect_binning_window.destroy)
+        self.button_close.grid(row=self.row_num + 3, column=3)
+
+        # labels for the two columns, binning ceiling value and binning color value
+        tk.Label(self.defect_binning_window, text='Bin Ceiling').grid(row=1, column=0, columnspan=1)
+        tk.Label(self.defect_binning_window, text='Bin Color').grid(row=1, column=1, columnspan=1)
+
+        # add in infinity bin (bin that starts at final finite bin ceiling and goes to infinity)
+        self.inf_bin_color = tk.Entry(self.defect_binning_window, 
+                                      textvariable=tk.StringVar(self.defect_binning_window, value=self.root_settings.inf_bin_color), width=8)
+        tk.Label(self.defect_binning_window, text='Infinity Bin Color').grid(row=0, column=3, columnspan=1)
+        self.inf_bin_color.grid(row=0, column=4)
+
+        # populate with previously saved choices...
+        for i in range(self.row_num):
+            self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                        [[tk.Entry(self.defect_binning_window, textvariable=tk.StringVar(self.defect_binning_window, value=self.root_settings.binning_ranges[i]), width=10),
+                                          tk.Entry(self.defect_binning_window, textvariable=tk.StringVar(self.defect_binning_window, value=self.root_settings.binning_colors[i]), width=10)]], axis=0)
+            self.list_of_entry_fields[-1][0].grid(row=i+2, column=0)
+            self.list_of_entry_fields[-1][1].grid(row=i+2, column=1)
+
+    def add_binning_range(self):
+        """ Adds a new defect binning range entry """
+        self.row_num = self.row_num + 1  # iterate variable representing number of fields
+
+        # append new fields to list
+        self.list_of_entry_fields = np.append(self.list_of_entry_fields,
+                                        [[tk.Entry(self.defect_binning_window, width=10),
+                                          tk.Entry(self.defect_binning_window, width=10)]], axis=0)
+
+        # after appending we can use -1 to reference the last item appened
+        self.list_of_entry_fields[-1][0].grid(row=self.row_num + 1, column=0)
+        self.list_of_entry_fields[-1][1].grid(row=self.row_num + 1, column=1)
+        # now update the location of the accept and close buttons
+        self.button_set_binning.grid(row=self.row_num + 2, column=3)
+        self.button_close.grid(row=self.row_num + 3, column=3)
+
+    def remove_binning_range(self):
+        """ Removes most recent defect binning range entry """
+        if len(self.list_of_entry_fields) > 0:
+            (self.defect_binning_window.winfo_children()[-1]).destroy()
+            (self.defect_binning_window.winfo_children()[-1]).destroy()
+            # update the number of fields
+            self.list_of_entry_fields = self.list_of_entry_fields[:-1]
+            self.row_num = self.row_num - 1
+            # now update the location of the accept and close buttons
+            self.button_set_binning.grid(row=self.row_num + 2, column=3)
+            self.button_close.grid(row=self.row_num + 3, column=3)
+        else:
+            print('No binning ranges to remove')
+
+    def set_binning_options(self):
+        """ Send current binning options back to MosaicSettings """
+        def get_var_value(x):
+            return x.get()
+
+        # we vectorize a function to get values out of StringVar
+        vectorized = np.vectorize(get_var_value)
+        if self.list_of_entry_fields.size == 0:
+            self.root_settings.binning_ranges = np.array([])
+            self.root_settings.binning_colors = np.array([])
+        else:
+            self.root_settings.binning_ranges = vectorized(self.list_of_entry_fields[:, 0:1]).flatten().astype(float)
+            self.root_settings.binning_colors = vectorized(self.list_of_entry_fields[:, 1:2]).flatten()
+        self.root_settings.inf_bin_color = self.inf_bin_color.get()
