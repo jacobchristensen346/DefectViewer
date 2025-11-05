@@ -90,19 +90,57 @@ class DefectSizeBinning:
             self.button_close.grid(row=self.row_num + 3, column=3)
         else:
             print('No binning ranges to remove')
+            
+    def get_var_value(self, x):
+        """ Simple helper function for vectorization """
+        return x.get()
+    
+    def check_field_inputs(self) -> bool:
+        """ Tests the user's inputs for validity """
+        # first check if there are no bin range fields
+        if self.list_of_entry_fields.size == 0: 
+            return True
+        
+        vectorized = np.vectorize(self.get_var_value)  # we vectorize a function to get values out of StringVar
+        range_inputs = vectorized(self.list_of_entry_fields[:, 0:1]).flatten()  # bin range inputs
+        color_inputs = vectorized(self.list_of_entry_fields[:, 1:2]).flatten()  # bin color inputs
+        color_test = tk.Toplevel()  # create temporary window for color testing
+        try:
+            # if the color is invalid, a TclError will be raised
+            tk.Label(color_test, bg=self.inf_bin_color.get())
+            for color in color_inputs:
+                tk.Label(color_test, bg=color)
+            range_inputs.astype(float)  # test if bin range array values can be converted to float
+            if np.all(np.diff(range_inputs.astype(float)) > 0):  # test if range values are strictly increasing
+                return True
+            else:
+                print("Error, bin range values are not strictly increasing")
+                return False
+        except tk.TclError:
+            print("Invalid color input")
+            return False
+        except ValueError:
+            print("Invalid input, please enter decimal numbers for binning ranges")
+            return False
+        except Exception as e:  # Catch any other unexpected errors
+            print(f"The following error occurred from user input: {e}")
+            return False
+        finally:
+            color_test.destroy()  # ensure test window is destroyed
 
     def set_binning_options(self):
         """ Send current binning options back to MosaicSettings """
-        def get_var_value(x):
-            return x.get()
-
-        # we vectorize a function to get values out of StringVar
-        vectorized = np.vectorize(get_var_value)
-        if self.list_of_entry_fields.size == 0:
-            self.mosaic_settings.binning_ranges = np.array([])
-            self.mosaic_settings.binning_colors = np.array([])
+        # check user inputs for validity
+        if self.check_field_inputs():
+            # if user inputs pass validity test proceed with saving the values
+            if self.list_of_entry_fields.size == 0:
+                self.mosaic_settings.binning_ranges = np.array([])
+                self.mosaic_settings.binning_colors = np.array([])
+            else:
+                vectorized = np.vectorize(self.get_var_value)  # we vectorize a function to get values out of StringVar
+                self.mosaic_settings.binning_ranges = vectorized(self.list_of_entry_fields[:, 0:1]).flatten().astype(float)
+                self.mosaic_settings.binning_colors = vectorized(self.list_of_entry_fields[:, 1:2]).flatten()
+            self.mosaic_settings.inf_bin_color = self.inf_bin_color.get()
+            self.mosaic_settings.which_binning_show = "SIZE"
         else:
-            self.mosaic_settings.binning_ranges = vectorized(self.list_of_entry_fields[:, 0:1]).flatten().astype(float)
-            self.mosaic_settings.binning_colors = vectorized(self.list_of_entry_fields[:, 1:2]).flatten()
-        self.mosaic_settings.inf_bin_color = self.inf_bin_color.get()
-        self.mosaic_settings.which_binning_show = "SIZE"
+            pass
