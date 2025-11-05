@@ -202,7 +202,7 @@ class MosaicCreator:
         self.root.root_wnd.update()
 
         list_of_images = np.array(next(os.walk(self.root.img_loc + '/'))[2])  # list of images from directory
-        mosaic_image_name = list_of_images[np.flatnonzero(np.core.defchararray.find(list_of_images,'Mosaic') != -1)[0]]  # find mosaic image in list
+        mosaic_image_name = list_of_images[np.flatnonzero(np.char.find(list_of_images,'Mosaic') != -1)[0]]  # find mosaic image in list
         image = Image.open(self.root.img_loc + '/' + mosaic_image_name)  # open initial mosaic image from file
         self.mos_source_width, self.mos_source_height = image.size  # get the native size of the mosaic image
         # resize mosaic image and interpolate
