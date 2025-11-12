@@ -124,7 +124,13 @@ def clicked(mosaic_creator, event):
                     # original high-res tile image over and over during zoom
                     self.pyramid = [self.image]  # initialize pyramid list with native image tile
                     self.curr_img = 0  # to keep track of which image to use from the pyramid during zoom
-                    self.reduce_factor = 2  # the factor by which to shrink image size
+                    # the factor by which to shrink image size
+                    # if we set this equal to the zoom scale factor
+                    # then we have a one-to-one selection of pyramid
+                    # image resolution to total scaling from zoom
+                    # using the logarithmic function 
+                    # log(current image scale from zoom, pyramid scale factor) = pyramid list index
+                    self.reduce_factor = 1.3
                     w, h = self.pyramid[0].size  # starting width and height
                     pyr_cutoff = 512  # the pixel size to stop reducing beyond
                     while w > pyr_cutoff and h > pyr_cutoff:
@@ -636,4 +642,5 @@ def clicked(mosaic_creator, event):
             print(tile_name)
             # create an object of the TileWindow class
             tile_window = TileWindow(tk.Toplevel(), path=filename, window_name=tile_name)
+
             tile_window.mainloop()
