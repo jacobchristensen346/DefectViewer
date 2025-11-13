@@ -79,8 +79,13 @@ def clicked(mosaic_creator, event):
                     self.delta = 1.3  # factor by which to scale for a single zoom event
                     self.previous_state = 0  # previous state of the keyboard
                     self.path = path  # path to the image
+                    
                     # create frame in master window to hold tile canvas
                     self.imframe = ttk.Frame(placeholder)
+                    # document initial window size/area
+                    # will be useful if the window is resized by a user
+                    placeholder.update()
+                    self.window_area = placeholder.winfo_width() * placeholder.winfo_height()
                     
                     # vertical and horizontal scrollbars for canvas
                     hbar = SmartScrollbar(self.imframe, orient='horizontal')
@@ -124,21 +129,17 @@ def clicked(mosaic_creator, event):
                     # original high-res tile image over and over during zoom
                     self.pyramid = [self.image]  # initialize pyramid list with native image tile
                     self.curr_img = 0  # to keep track of which image to use from the pyramid during zoom
-                    # the factor by which to shrink image size
-                    # if we set this equal to the zoom scale factor
-                    # then we have a one-to-one selection of pyramid
-                    # image resolution to total scaling from zoom
-                    # using the logarithmic function 
-                    # log(current image scale from zoom, pyramid scale factor) = pyramid list index
-                    self.reduce_factor = 1.3
-                    w, h = self.pyramid[0].size  # starting width and height
+                    self.reduce_factor = 2  # the factor by which to shrink image size
+                    w, h = self.pyramid[0].size  # original width and height
+                    i = 1  # dummy index determines number of reduction factors to apply
                     pyr_cutoff = 512  # the pixel size to stop reducing beyond
                     while w > pyr_cutoff and h > pyr_cutoff:
-                        w = w / self.reduce_factor
-                        h = h / self.reduce_factor
+                        w = self.imwidth / (i * self.reduce_factor)
+                        h = self.imheight / (i * self.reduce_factor)
                         reduced_image = self.pyramid[-1].resize((int(w), int(h)), Image.LANCZOS)
                         # append scaled image to pyramid list
                         self.pyramid.append(reduced_image)
+                        i += 1  # iterate dummy index
                     # self.scale will track the "total" amount of scaling
                     # needed when cropping and displaying the pyramid image
                     # it will factor in the zoom events (self.imscale)
@@ -313,7 +314,7 @@ def clicked(mosaic_creator, event):
                 def show_image(self):
                     """ Show image on the canvas 
                     
-                    Performs scaling based on scroll and zoom
+                    Performs scaling based on scroll and zoom events
                     """
                     # get image coordinates on the canvas 
                     # based on our rectangle stand-in for the image
@@ -372,7 +373,7 @@ def clicked(mosaic_creator, event):
                         # that would be visible based on the scroll/zoom of the canvas
                         # we must scale the dimensions to crop based on the
                         # reduction factor of the currently selected image
-                        image = self.pyramid[max(0, self.curr_img)].crop(
+                        image = self.pyramid[self.curr_img].crop(
                                 (int(x1 / self.scale), int(y1 / self.scale),
                                  int(x2 / self.scale), int(y2 / self.scale)))
                         
@@ -385,7 +386,7 @@ def clicked(mosaic_creator, event):
                         imageid = self.canvas.create_image(max(box_canvas[0], box_img_int[0]),
                                                            max(box_canvas[1], box_img_int[1]),
                                                            anchor='nw', image=imagetk)
-
+                        
                         self.canvas.lower(imageid)  # set image into background
                         # make a copy to prevent garbage collection
                         self.canvas.imagetk = imagetk
@@ -562,15 +563,24 @@ def clicked(mosaic_creator, event):
                             return
                         self.imscale = self.imscale * self.delta
                         scale_inst = scale_inst * self.delta
-                    # take appropriate image from the pyramid
-                    self.curr_img = min((-1) * int(math.log(self.imscale, self.reduce_factor)), len(self.pyramid) - 1)
+                    # set an index for the appropriate image from the pyramid
+                    # OLD ALGORITHM: self.curr_img = min((-1) * int(math.log(self.imscale, self.reduce_factor)), len(self.pyramid) - 1)
+                    # we must factor in the case where a user manually changes
+                    # the size of the tile window, thus increasing the cropping area
+                    # get the current frame area and compare to the initial frame area
+                    # curr_frame_area = self.imframe.winfo_width() * self.imframe.winfo_height()
+                    self.curr_img = min(round((1 / (self.imscale)) * (1 / self.reduce_factor)), 
+                                        len(self.pyramid) - 1)
                     # self.imscale alone determines the scale from
                     # only the zoom events that have occured
                     # below we factor in the total reduction scale
                     # of the selected pyramid image by multiplying the total 
-                    # zoom scale by the reduction factor a number of times equal to
-                    # the index of the pyramid image in the pyramid list
-                    self.scale = self.imscale * self.reduce_factor**(max(0, self.curr_img))
+                    # zoom scale by the reduction factor
+                    # OLD ALGORITHM: self.scale = self.imscale * self.reduce_factor**(max(0, self.curr_img))
+                    if self.curr_img == 0:
+                        self.scale = self.imscale
+                    else:
+                        self.scale = self.imscale * self.reduce_factor * self.curr_img
                     # rescale all objects in canvas using scale_inst
                     self.canvas.scale('all', x, y, scale_inst, scale_inst)
                     
@@ -631,6 +641,7 @@ def clicked(mosaic_creator, event):
                     ttk.Frame.__init__(self, master=tilewindow)
                     self.master.title(window_name)
                     self.master.geometry('800x600')  # size of the main window
+                    self.master.update()
                     self.master.rowconfigure(0, weight=1)  # make the canvas widget expandable
                     self.master.columnconfigure(0, weight=1)
                     canvas_widget = TileCanvas(self.master, path)  # create widget for master window
@@ -642,5 +653,4 @@ def clicked(mosaic_creator, event):
             print(tile_name)
             # create an object of the TileWindow class
             tile_window = TileWindow(tk.Toplevel(), path=filename, window_name=tile_name)
-
             tile_window.mainloop()
