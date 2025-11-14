@@ -3,6 +3,8 @@ from threading import Thread
 import fitz
 import tkinter as tk
 from tkinter import ttk
+from PIL import Image, ImageTk
+import math
 
 class ShowPdf():
     """ Imports PDF as scrollable image into tkinter  

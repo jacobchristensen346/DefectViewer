@@ -292,6 +292,3 @@ class Root:
         directory_name = filedialog.askdirectory()
         self.scan_dir_entry.delete(0, 'end')
         self.scan_dir_entry.insert(tk.END, directory_name)
-        
-root_obj = Root()
-root_obj.root_wnd.mainloop()

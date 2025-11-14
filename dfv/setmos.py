@@ -57,12 +57,14 @@ class MosaicSettings:
 
         # button to open defect area binning window
         # pass instance of MosaicSettings to DefectSizeBinning
-        button_defect_binning = tk.Button(self.mosaic_settings_window, text='Size Binning', width=10, command=lambda: sizebinmos.DefectSizeBinning(self))
+        button_defect_binning = tk.Button(self.mosaic_settings_window, text='Size Binning', width=10, 
+                                          command=lambda: sizebinmos.DefectSizeBinning(self))
         button_defect_binning.grid(row=4, column=0)
 
         # button to open defect class binning window
         # pass instance of MosaicSettings to DefectTypeBinning
-        button_defect_binning = tk.Button(self.mosaic_settings_window, text='Class Binning', width=10, command=lambda: typebinmos.DefectTypeBinning(self))
+        button_defect_binning = tk.Button(self.mosaic_settings_window, text='Class Binning', width=10, 
+                                          command=lambda: typebinmos.DefectTypeBinning(self))
         button_defect_binning.grid(row=5, column=0)
 
         # button to open defect text label options
@@ -123,8 +125,10 @@ class MosaicSettings:
         # update defect data if needed
         if self.mosaic_creator.analysis_id != self.analysis_id_change.get() and self.analysis_id_change.get() != 'Select Choice':
             self.mosaic_creator.analysis_id = self.analysis_id_change.get()
-            self.mosaic_creator.defect_data = np.array(self.mosaic_creator.cur.execute(self.mosaic_creator.sql_cmd_def, (str(self.mosaic_creator.analysis_id),)).fetchall())  # fetch all data from defect table
-            self.mosaic_creator.defect_type_data = np.array(self.mosaic_creator.cur.execute(self.mosaic_creator.sql_cmd_typ, (str(self.mosaic_creator.analysis_id),)).fetchall())  # fetch all data from detection class table
+            self.mosaic_creator.defect_data = np.array(self.mosaic_creator.cur.execute(self.mosaic_creator.sql_cmd_def, 
+                                                                                       (str(self.mosaic_creator.analysis_id),)).fetchall())  # fetch all data from defect table
+            self.mosaic_creator.defect_type_data = np.array(self.mosaic_creator.cur.execute(self.mosaic_creator.sql_cmd_typ, 
+                                                                                            (str(self.mosaic_creator.analysis_id),)).fetchall())  # fetch all data from detection class table
 
             # we must reset defect classification binning in both MosaicCreator and MosaicSettings
             # otherwise, if the MosaicSettings window is not closed between analysis ID changes the previous binning is remembered and applied to wrong analysis
@@ -133,7 +137,9 @@ class MosaicSettings:
             self.binning_type_colors = np.array([])
 
             # now update the name of the window
-            self.mosaic_creator.mosaic_window.title(self.mosaic_creator.sample_name + " || " + "Scan ID = " + str(self.mosaic_creator.root.scan_id.get()) + " || " + "Analysis ID = " + str(self.mosaic_creator.analysis_id))
+            self.mosaic_creator.mosaic_window.title(self.mosaic_creator.sample_name + " || " + "Scan ID = " + 
+                                                    str(self.mosaic_creator.root.scan_id.get()) + " || " + "Analysis ID = " + 
+                                                    str(self.mosaic_creator.analysis_id))
 
         # re-plot the mosaic with the new settings
         # check if user has selected image view only
