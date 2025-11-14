@@ -242,7 +242,7 @@ class MosaicCreator:
         if self.root.image_view_only.get() == 0: 
             self.plot_defects()  # function that plots the defects onto the canvas created above
 
-        self.canvas.bind('<Button-1>', lambda event: tileclick.clicked(self, event))  # makes mosaic selectable
+        self.canvas.bind('<Button-1>', lambda event: tileclick.Clicked(self, event))  # makes mosaic selectable
 
         load_progress.config(text='Done Loading!')  # update root window upon image load completion
         self.root.root_wnd.update()
@@ -252,4 +252,5 @@ class MosaicCreator:
         button_advanced.grid(row=1, column=0)
         button_size_binning.grid(row=1, column=0, sticky='e')
         button_class_binning.grid(row=2, column=0, sticky='e')
+
         button_analy_stats.grid(row=3, column=0, sticky='e')
