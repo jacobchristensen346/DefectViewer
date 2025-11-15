@@ -8,16 +8,14 @@ image displaying defects. The tile image can be panned, scrolled, and zoomed.
 This module triggers upon click event on the mosaic canvas to then display 
 the appropriate tile based on click location.
 
-Classes
--------
-Clicked :
-    Initiate individual tile view upon click event. Starts the whole process.
-TileWindow(ttk.Frame) :
-    Configures tile window and instantiates tile canvas class.
-SmartScrollbar(ttk.Scrollbar) :
-    A scrollbar that hides when scrolling is not needed.
-TileCanvas :
-    Create and display a scrollable and zoomable tile image on a canvas.
+This module is not intended to be used independently of the dfv package.
+It will be imported by other modules when needed.
+
+Classes:
+    Clicked: Initiate tile view upon click event. Starts the whole process.
+    TileWindow(ttk.Frame): Configures window and instantiates canvas class.
+    SmartScrollbar(ttk.Scrollbar): A scrollbar that hides when not needed.
+    TileCanvas: Display a scrollable and zoomable tile image on a canvas.
 """
 
 # tileclick.py imports
@@ -34,61 +32,42 @@ class Clicked:
     Copy instance variables passed from MosaicCreator.
     Check which tile to plot in the tile window.
     
-    Attributes
-    ----------
-    mos_click_event : tk event object
-        Contains relevant information about the click event on the mosaic
-        canvas, primarily the coordinates.
-    binning_ranges : numpy array
-        Binning ranges for defects, based on defect area in um^2 (floats).
-    binning_colors : numpy array
-        Array of strings representing binning colors for each binning range.
-    binning_type_colors : numpy array
-        Array of strings for binning colors based on defect classification.
-    inf_bin_color : string
-        Color for the defect bin which goes to infinity.
-    label_fsize: int
-        Font size for defect labels.
-    defect_data : numpy array
-        Array containing all relevant defect data, such as location.
-    defect_type_data : numpy array
-        Array containing relevant defect classification information.
-    which_binning_show : string
-        Variable tells which defect binning to show by default.
-    mos_tile_width : float
-        Width of mosaic canvas tile.
-    mos_tile_height : float
-        Height of mosaic canvas tile.
-    text_choices : numpy array
-        Mask array of bools indicating info to include in each defect label.
-    image_view_only : int (0 or 1)
-        Determins whether to plot defects or only show the image.
-    img_loc : string
-        Mosaic image directory.
-    image_data : numpy array
-        Image data from the database file.
-    sel_irow : int
-        Indicates the selected image row in database file.
-        
-    Methods
-    -------
-    tile_check()
-        Checks which tile within the mosaic canvas was selected
-        based on the coordinates of the event.
+    Attributes:
+        mos_click_event (tk event object): Contains relevant information about 
+            the click event on the mosaic canvas, primarily the coordinates.
+        binning_ranges (numpy array): Binning ranges for defects, based on 
+            defect area in um^2 (floats).
+        binning_colors (numpy array): Array of strings representing binning 
+            colors for each binning range.
+        binning_type_colors (numpy array): Array of strings for binning colors
+            based on defect classification.
+        inf_bin_color (str): Color for the defect bin which goes to infinity.
+        label_fsize (int): Font size for defect labels.
+        defect_data (numpy array): Array containing all relevant defect data, 
+            such as location.
+        defect_type_data (numpy array): Relevant defect type information.
+        which_binning_show (str): Which defect binning to show by default.
+        mos_tile_width (float): Width of mosaic canvas tile.
+        mos_tile_height (float): Height of mosaic canvas tile.
+        text_choices (numpy array): Mask array for selecting defect label info.
+        image_view_only (int): Determins whether to plot defects or only show 
+            the image (value of 0 or 1).
+        img_loc (str): Mosaic image directory.
+        image_data (numpy array): Image data from the database file.
+        sel_irow (int): Indicates the selected image row in database file.
     """
     
     def __init__(self, mosobj, event):
         """Receive event and instance related to click event.
         
-        Parameters
-        ----------
-        mosobj : class instance
-            MosaicCreator class instance holding attributes relevant
-            to the click event.
-        event : tk event object
-            Holds information relevant to the click event on the mosaic canvas.
+        Args:
+            mosobj (class instance): MosaicCreator class instance holding 
+                attributes relevant to the click event.
+            event (tk event object): Holds information relevant to the click 
+                event on the mosaic canvas.
 
-        Returns -> None.
+        Returns:
+            None.
         """
         print(event)
         self.mos_click_event = event
@@ -122,7 +101,8 @@ class Clicked:
         Determines if mosaic tile has actual image tile
         and is not a blank space between separate die.
         
-        Returns -> None.
+        Returns:
+            None.
         """
         # iterate through all image data rows, 
         # find selected image according to click event,
@@ -163,18 +143,14 @@ class TileWindow(ttk.Frame):
     def __init__(self, click_obj, tilewindow, path, window_name):
         """Initialize the window and master frame.
 
-        Parameters
-        ----------
-        click_obj : class instance
-            Instance of Clicked class passed along.
-        tilewindow : tk window object
-            The top level tk window object used to show tile image.
-        path : string
-            Directory filepath to clicked tile image.
-        window_name : string
-            Name for the tile window, based on image scanning order.
+        Args:
+            click_obj (class instance): Instance of Clicked class passed along.
+            tilewindow (tk window object): The top level window for tile image.
+            path (str): Directory filepath to clicked tile image.
+            window_name (str): Name for the window, based on selected tile.
 
-        Returns -> None.
+        Returns:
+            None.
         """
         ttk.Frame.__init__(self, master=tilewindow)
         self.master.title(window_name)
@@ -204,121 +180,52 @@ class SmartScrollbar(ttk.Scrollbar):
 class TileCanvas:
     """Create and display a scrollable and zoomable tile image on a canvas.
     
-    Attributes
-    ----------
-    clob : class instance
-        TileCanvas holds instance containing copy of MosaicCreator attributes.
-        Passed from Clicked to TileWindow and then to TileCanvas. See the
-        Clicked class for details of the copied attributes in use.
-    hide_defect_labels : int (0 or 1)
-        Tracks choice whether or not to show defect labels.
-    hide_defect_marks : int (0 or 1)
-        Tracks choice to show defect marks
-    measure_choice : string
-        Variable tracks user's choice of manual measurement on tile canvas.
-    start_x : float
-        X-coordinate representing starting location for drawing areas.
-    start_y : float
-        Y-coordinate representing starting location for drawing areas.
-    new_font_size: int
-        Shared variable for adjusting font sizes upon zoom.
-    imscale : float
-        Scale for the canvas image zoom, will retain all zoom 
-        events within its value. Start at 1.0 value.
-    delta : float
-        Factor by which to scale for a single zoom event.
-    previous_state : int
-        Previous state of the keyboard.
-    path : string
-        File path to the image.
-    imframe : tk frame object
-        Create frame in master window to hold tile canvas.
-    canvas : tk canvas object
-        Tkinter Canvas object to display clicked tile image.
-    image : PIL image object
-        Variable to load the clicked image tile into.
-    imwidth : float
-        Native width of the tile image.
-    imheight : float
-        Native height of the tile image.
-    min_side : float
-        Equal to the smaller image dimension (width vs height).
-    pyramid : list
-        List of PIL images, each scaled by some reduction factor to
-        create a "pyramid" of the same image at different resolutions.
-    curr_img : int
-        Represents the index of the pyramid image selected after zoom event.
-    reduce_factor : float
-        The factor by which to scale each pyramid image's resolution.
-    scale : float
-        Tracks the total amount of scaling by considering both the currently
-        selected pyramid image's resolution and the scale from zoom events.
-    container : tk rectangle object
-        A rectangle object created on the canvas initially at the native
-        size of the tile image. This rectangle remains on the canvas at all
-        times and tracks how the tile image should be scaled after each event.
-        
-    Methods
-    -------
-    grid(**kw)
-        Put CanvasImage widget on the parent widget.
-    scroll_x(*args, **kwargs)
-        Scroll canvas horizontally and redraw the image.
-    scroll_y(*args, **kwargs)
-        Scroll canvas vertically and redraw the image.
-    poly_oval_v2(x0, y0, x1, y1, steps=50, rotation=0)
-        Return an oval as coordinates suitable for create_polygon.
-    show_defects()
-        Plot defects on the selected image.
-    toggle_binning(toggle_choice)
-        Toggle visibility for the desired set of defect binning colors.
-    show_labels()
-        Plot defect labels on selected image.
-    defect_mark_vis()
-        Hide or reveal defect labels and/or marks when toggled.
-    show_image()
-        Show image on the canvas.
-    create_option_buttons()
-        Create option buttons off to the side of the canvas.
-    set_measure_choice(arg)
-        Set which kind of object to draw with the measuring tool.
-    on_right_click(event)
-        Initialize the measurement tool use upon right mouse click.
-    on_right_click_drag(event)
-        Allows for measurement size modification through dragging the mouse.
-    on_right_click_release(event)
-        Finalize measurement upon release of right mouse click.
-    destroy_measure_markers(event)
-        Remove any measurement markers on the canvas.
-    move_from(event)
-        Remember previous coordinates for scrolling with left mouse click.
-    move_to(event)
-        Drag canvas to the new position while holding left mouse click.
-    outside(x, y)
-        Checks if the point (x, y) is outside the image area.
-    wheel(event)
-        Zoom on the tile with mouse wheel.
-    keystroke(event)
-        Scrolling with the keyboard.
-    destroy()
-        Destroy image list, frame, and canvas.
+    Attributes:
+        clob (class instance): TileCanvas holds instance containing copy of 
+            MosaicCreator attributes. Passed from Clicked to TileWindow and 
+            then to TileCanvas. See the Clicked class for details of the 
+            copied attributes in use.
+        hide_defect_labels (int): Whether to show defect labels (0 or 1).
+        hide_defect_marks (int): Tracks choice to show defect marks (0 or 1).
+        measure_choice (str): Choice of manual measurement on tile canvas.
+            For example, "Line" or "Circle".
+        start_x (float): X-coord represents start location for drawing areas.
+        start_y (float): Y-coord represents start location for drawing areas.
+        new_font_size (int): Adjusts font sizes upon zoom.
+        imscale (float): Scale for the canvas image zoom, will retain all zoom 
+            events within its value. Start at 1.0 value.
+        delta (float): Factor by which to scale for a single zoom event.
+        previous_state (int): Previous state of the keyboard.
+        path (str): File path to the image.
+        imframe (tk frame object): Create frame in window to hold tile canvas.
+        canvas (tk canvas object): Display clicked tile image on canvas.
+        image (PIL image object): Load the clicked image tile.
+        imwidth (float): Native width of the tile image.
+        imheight (float): Native height of the tile image.
+        min_side (float): Equal to the smaller image dimension (w vs. h).
+        pyramid : (list): PIL images, each scaled by some reduction factor to
+            create a "pyramid" of the same image at different resolutions.
+        curr_img (int): Index of the pyramid image selected after zoom event.
+        reduce_factor (float): Scale factor for each pyramid image resolution.
+        scale (float): Tracks the total amount of scaling by considering both 
+            the currently selected pyramid res and the scale from zoom events.
+        container (tk rectangle object): Created initially at the native size 
+            of the tile image. Remains on the canvas at all times and tracks 
+            how the tile image should be scaled after each zoom/scroll event.
     """
     
     def __init__(self, click_obj, placeholder, path):
         """Initialize the image frame and canvas.
 
-        Parameters
-        ----------
-        click_obj : class instance
-            Instance of Clicked class passed along. Certain attributes will
-            be unloaded and copied here.
-        placeholder : tk window object
-            The top level tk window frame object passed along to hold 
-            tile image and any other relevant widgets.
-        path : string
-            Directory filepath to clicked image tile.
+        Args:
+            click_obj (class instance): Instance of Clicked class passed along. 
+                Certain attributes will be unloaded and copied here.
+            placeholder (tk window object): The top level window frame passed 
+                along to hold the tile image and any other relevant widgets.
+            path (str): Directory filepath to clicked image tile.
 
-        Returns -> None.
+        Returns:
+            None.
         """
         self.clob = click_obj
         self.hide_defect_labels = None
@@ -416,13 +323,12 @@ class TileCanvas:
     def grid_(self, **kw):
         """Put CanvasImage widget on the parent widget.
         
-        Parameters
-        ----------
-        **kw : keyword arguments
-            Intended to receive arguments appropriate for the
-            tk grid() command, such as row and column number.
+        Args:
+            **kw: Arbitrary keyword arguments for tk.grid() command
+                (e.g., 'row' and 'column' as int)
 
-        Returns -> None.
+        Returns:
+            None.
         """
         self.imframe.grid(**kw)  # place CanvasImage widget on the grid
         self.imframe.grid(sticky='nswe')  # make frame container sticky
@@ -432,12 +338,13 @@ class TileCanvas:
     def scroll_x(self, *args, **kwargs):
         """Scroll canvas horizontally and redraw the image.
 
-        Parameters
-        ----------
-        *args, **kwargs : arguments
-            Arguments appropriate for xview() tk command.
+        Args:
+            *args: Variable length arguments approriate for tk xview()
+            **kwargs: Arbitrary keyword arguments for the tk xview() command.
+                Expected key is 'event' (tk event object).
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.canvas.xview(*args)  # scroll horizontally
         self.show_image()  # redraw the image on new visible canvas location
@@ -445,34 +352,33 @@ class TileCanvas:
     def scroll_y(self, *args, **kwargs):
         """Scroll canvas vertically and redraw the image.
 
-        Parameters
-        ----------
-        *args, **kwargs : arguments
-            Pass arguments appropriate for the yview() tk command.
+        Args:
+            *args: Variable length arguments approriate for tk yview()
+            **kwargs: Arbitrary keyword arguments for the tk yview() command.
+                Expected key is 'event' (tk event object).
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.canvas.yview(*args)  # scroll vertically
         self.show_image()  # redraw the image on new visible canvas location
 
     def poly_oval_v2(self, x0, y0, x1, y1, steps=50, rotation=0):
-        """NEW VERSION (uses numpy): Return an oval as 
-        coordinates suitable for create_polygon.
+        """Return an oval as coordinates suitable for create_polygon.
 
-        Parameters
-        ----------
-        x0, y0, x1, y1 : float
-            Coordinates for the top left (x0, y0) and bottom right (x1, y1)
-            of the boudning rectangle for the intended oval.
-        steps : int, optional
-            The number of sides to include in the polygon. The default is 50.
-        rotation : float, optional
-            Degree of rotation for bounding rectangle. The default is 0.
+        Args:
+            x0 (float): X-coord for top left of bounding rectangle for oval.
+            y0 (float): Y-coord for top left of bounding rectangle for oval.
+            x1 (float): X-coord for bott right of bounding rectangle for oval.
+            y1 (float): Y-coord for bott right of bounding rectangle for oval.
+            steps (int, optional): The number of sides to include in the 
+                polygon. The default is 50.
+            rotation (float, optional): Degree of rotation for bounding 
+                rectangle. The default is 0.
 
-        Returns
-        -------
-        point_list : numpy array of floats
-            Array containing [x, y] pairs representing polygon points.
+        Returns:
+            point_list (numpy array): Array of floats containing [x, y] pairs 
+                representing polygon vertices.
         """
         # x0,y0,x1,y1 as from create_oval
         # rotation is in degrees, convert to radians
@@ -499,7 +405,8 @@ class TileCanvas:
     def show_defects(self):
         """Plot defects on the selected image.
         
-        Returns -> None
+        Returns:
+            None.
         """
         # get image coordinates on canvas 
         # based on our always-present rectangle
@@ -577,13 +484,12 @@ class TileCanvas:
     def toggle_binning(self, toggle_choice):
         """Toggle visibility for the desired set of defect binning colors.
         
-        Parameters
-        ----------
-        toggle_choice : string
-            A string that describes the choice of binning type, such
-            as "SIZE" or "CLASS".
+        Args:
+            toggle_choice (str): A string that describes the choice of binning 
+                type, such as "SIZE" or "CLASS".
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.clob.which_binning_show = toggle_choice  # update visibility
         if toggle_choice == "SIZE":
@@ -600,7 +506,8 @@ class TileCanvas:
     def show_labels(self):
         """Plot defect labels on selected image.
         
-        Returns -> None
+        Returns:
+            None.
         """
         # get image coordinates on canvas 
         # based on our always-present rectangle
@@ -649,7 +556,8 @@ class TileCanvas:
     def defect_mark_vis(self):
         """Hide or reveal defect labels and/or marks when toggled.
 
-        Returns -> None
+        Returns:
+            None.
         """
         if self.hide_defect_marks.get() == 1:
             self.canvas.itemconfig("DEFECT_TILE_MARK_SIZE_BINNING",
@@ -674,7 +582,8 @@ class TileCanvas:
         
         Performs scaling based on scroll and zoom.
         
-        Returns -> None
+        Returns:
+            None.
         """
         # get image coordinates on the canvas 
         # based on our rectangle stand-in for the image
@@ -750,7 +659,8 @@ class TileCanvas:
     def create_option_buttons(self):
         """Create option buttons off to the side of the canvas.
 
-        Returns -> None
+        Returns:
+            None.
         """
         # these labels/buttons relate to manual measurement tools
         tk.Label(self.imframe, text='Measurement Tool').grid(row=1, column=1, 
@@ -796,25 +706,24 @@ class TileCanvas:
     def set_measure_choice(self, arg):
         """Set which kind of object to draw with the measuring tool.
         
-        Parameters
-        ----------
-        arg : string
-            String representing the type of object to draw on canvas
-            For example, "Circle" or "Line".
+        Args:
+            arg (str): String representing the type of object to draw.
+                For example, "Circle" or "Line".
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.measure_choice = arg
 
     def on_right_click(self, event):
         """Initialize the measurement tool use upon right mouse click.
         
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant button press event info, such as coordinates.
+        Args:
+            event (tk event object): Contains the relevant button press 
+                event info, such as coordinates.
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.start_x = self.canvas.canvasx(event.x)
         self.start_y = self.canvas.canvasy(event.y)
@@ -824,12 +733,12 @@ class TileCanvas:
         
         Hold right mouse button while dragging.
         
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant motion event info, such as coordinates.
+        Args:
+            event (tk event object): Contains the relevant motion event info, 
+                such as coordinates.
 
-        Returns -> None
+        Returns:
+            None.
         """
         evx = self.canvas.canvasx(event.x) # load into less verbose variables
         evy = self.canvas.canvasy(event.y)
@@ -855,12 +764,12 @@ class TileCanvas:
     def on_right_click_release(self, event):
         """Finalize measurement upon release of right mouse click.
         
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant release event info, such as coordinates.
+        Args:
+            event (tk event object): Contains the relevant release event info, 
+                such as coordinates.
 
-        Returns -> None
+        Returns:
+            None.
         """
         evx = self.canvas.canvasx(event.x) # load into less verbose variables
         evy = self.canvas.canvasy(event.y)
@@ -937,12 +846,11 @@ class TileCanvas:
     def destroy_measure_markers(self, event):
         """Remove any measurement markers on the canvas.
 
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant button press event info.
+        Args:
+            event (tk event object): Contains the button press event info.
 
-        Returns -> None
+        Returns:
+            None.
         """
         for item in self.canvas.find_withtag("final_area_circle"):
             self.canvas.delete(item)
@@ -952,24 +860,24 @@ class TileCanvas:
     def move_from(self, event):
         """Remember previous coordinates for scrolling with left mouse click.
 
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant button press event info, such as coordinates.
+        Args:
+            event (tk event object): Contains the relevant button press event 
+                info, such as coordinates.
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.canvas.scan_mark(event.x, event.y)
 
     def move_to(self, event):
         """Drag canvas to the new position while holding left mouse click.
         
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant motion/drag event info, such as coordinates.
+        Args:
+            event (tk event object): Contains the relevant motion/drag event 
+                info, such as coordinates.
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.canvas.scan_dragto(event.x, event.y, gain=1)
         # crop and show new image region based on scrolling
@@ -980,15 +888,12 @@ class TileCanvas:
         
         Used to determine whether to zoom or not.
         
-        Parameters
-        ----------
-        x, y : floats
-            Coordinates of mouse wheel zoom event on canvas.
+        Args:
+            x (float): X-coordinate of mouse wheel zoom event on canvas. 
+            y (float): Y-coordinate of mouse wheel zoom event on canvas. 
 
-        Returns
-        -------
-        bool
-            "True" if point is within image area, "False" otherwise.
+        Returns:
+            bool: "True" if point is within image area, "False" otherwise.
         """
         # get image coordinates on canvas based on rectangle stand-in
         bbox = self.canvas.coords(self.container)
@@ -1000,13 +905,12 @@ class TileCanvas:
     def wheel(self, event):
         """Zoom on the tile with mouse wheel.
         
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant mouse wheel event info, such as coordinates,
-            and whether mouse wheel was spun up or down.
+        Args:
+            event (tk event object): Contains the mouse wheel event info, such 
+                as coordinates, and whether mouse wheel was spun up or down.
 
-        Returns -> None
+        Returns:
+            None.
         """
         x = self.canvas.canvasx(event.x) # get coordinates canvas event
         y = self.canvas.canvasy(event.y)
@@ -1078,12 +982,11 @@ class TileCanvas:
         Independent from the language of the keyboard,
         CapsLock, <Ctrl>+<key>, etc.
         
-        Parameters
-        ----------
-        event : tk event object
-            Contains the relevant button press event info.
+        Args:
+            event (tk event object): Contains the button press event info.
 
-        Returns -> None
+        Returns:
+            None.
         """
         if event.state - self.previous_state == 4:  # Control key is pressed
             pass  # do nothing if Control key is pressed
@@ -1108,7 +1011,8 @@ class TileCanvas:
         
         Currently not in use.
 
-        Returns -> None
+        Returns:
+            None.
         """
         self.image.close()
         map(lambda i: i.close, self.pyramid)  # close all pyramid images
