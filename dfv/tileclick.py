@@ -1,12 +1,23 @@
 """
-dfv.tileclicked
---------------
+-------------
+dfv.tileclick
+-------------
 
-This module provides classes and functions which create an
-interactive tile image displaying defects.
-The tile image can be panned, scrolled, and zoomed.
-This module triggers upon click event on the mosaic canvas
-to then display the appropriate tile based on click location.
+This module provides classes and functions which create an interactive tile 
+image displaying defects. The tile image can be panned, scrolled, and zoomed.
+This module triggers upon click event on the mosaic canvas to then display 
+the appropriate tile based on click location.
+
+Classes
+-------
+Clicked :
+    Initiate individual tile view upon click event. Starts the whole process.
+TileWindow(ttk.Frame) :
+    Configures tile window and instantiates tile canvas class.
+SmartScrollbar(ttk.Scrollbar) :
+    A scrollbar that hides when scrolling is not needed.
+TileCanvas :
+    Create and display a scrollable and zoomable tile image on a canvas.
 """
 
 # tileclick.py imports
@@ -22,10 +33,52 @@ class Clicked:
     
     Copy instance variables passed from MosaicCreator.
     Check which tile to plot in the tile window.
+    
+    Attributes
+    ----------
+    mos_click_event : tk event object
+        Contains relevant information about the click event on the mosaic
+        canvas, primarily the coordinates.
+    binning_ranges : numpy array
+        Binning ranges for defects, based on defect area in um^2 (floats).
+    binning_colors : numpy array
+        Array of strings representing binning colors for each binning range.
+    binning_type_colors : numpy array
+        Array of strings for binning colors based on defect classification.
+    inf_bin_color : string
+        Color for the defect bin which goes to infinity.
+    label_fsize: int
+        Font size for defect labels.
+    defect_data : numpy array
+        Array containing all relevant defect data, such as location.
+    defect_type_data : numpy array
+        Array containing relevant defect classification information.
+    which_binning_show : string
+        Variable tells which defect binning to show by default.
+    mos_tile_width : float
+        Width of mosaic canvas tile.
+    mos_tile_height : float
+        Height of mosaic canvas tile.
+    text_choices : numpy array
+        Mask array of bools indicating info to include in each defect label.
+    image_view_only : int (0 or 1)
+        Determins whether to plot defects or only show the image.
+    img_loc : string
+        Mosaic image directory.
+    image_data : numpy array
+        Image data from the database file.
+    sel_irow : int
+        Indicates the selected image row in database file.
+        
+    Methods
+    -------
+    tile_check()
+        Checks which tile within the mosaic canvas was selected
+        based on the coordinates of the event.
     """
     
     def __init__(self, mosobj, event):
-        """Receive event and instance related to click event
+        """Receive event and instance related to click event.
         
         Parameters
         ----------
@@ -37,43 +90,28 @@ class Clicked:
 
         Returns -> None.
         """
-        self.mos_click_event = event
         print(event)
+        self.mos_click_event = event
     
         # variables passed from the instance of MosaicCreator
         # these variables must be adjusted back to initial values as defined 
         # in the MosaicCreator object each time a click event happens
         # we make copies of these variables to ensure we do 
         # not overwrite the MosaicCreator instance from whence they came
-        # binning ranges for defects, based on defect area
         self.binning_ranges = mosobj.binning_ranges
-        # binning colors for defects based on defect area
         self.binning_colors = mosobj.binning_colors
-        # binning colors for defects based on defect classification
         self.binning_type_colors = mosobj.binning_type_colors
-        # color for the defect bin which goes to infinity
         self.inf_bin_color = mosobj.inf_bin_color
-        # font size for defect labels
         self.label_fsize = int(mosobj.font_size_defect_label)
-        # array containing all relevant defect data
         self.defect_data = mosobj.defect_data
-        # array containing relevant defect classification information
         self.defect_type_data = mosobj.defect_type_data
-        # variable tells which defect binning to show by default
         self.which_binning_show = mosobj.which_binning_show
-        # width of mosaic canvas tile
         self.mos_tile_width = mosobj.mos_tile_width
-        # height of mosaic canvas tile
         self.mos_tile_height = mosobj.mos_tile_height
-        # list of info to include in each defect label
         self.text_choices = mosobj.defect_label_text_choices
-        # variable determining whether to plot defects at all
         self.image_view_only = mosobj.root.image_view_only.get()
-        # mosaic image directory
         self.img_loc = mosobj.root.img_loc + '/'
-        # image data from the database file
         self.image_data = mosobj.image_data
-        # initialize a variable to indicate the selected image row in database
         self.sel_irow = None
         
         self.tile_check()
@@ -115,7 +153,12 @@ class Clicked:
               
                 
 class TileWindow(ttk.Frame):
-    """Creates tile window and initiates tile canvas creation."""
+    """Creates tile window and initiates tile canvas creation.
+    
+    Inherits from the ttk.Frame class, and utilizes its contructor in
+    conjunction with the passed tk.TopLevel() instance to configure
+    the tile image tkinter window.
+    """
     
     def __init__(self, click_obj, tilewindow, path, window_name):
         """Initialize the window and master frame.
@@ -146,8 +189,10 @@ class TileWindow(ttk.Frame):
             
 class SmartScrollbar(ttk.Scrollbar):
     """A scrollbar that hides when scrolling is not needed.
+    
     Sublcass of ttk.Scrollbar.
     """
+    
     def set(self, lo, hi):
         if float(lo) <= 0.0 and float(hi) >= 1.0:
             self.grid_remove()
@@ -157,8 +202,106 @@ class SmartScrollbar(ttk.Scrollbar):
 
 
 class TileCanvas:
-    """Create and display a scrollable 
-    and zoomable tile image on a canvas.
+    """Create and display a scrollable and zoomable tile image on a canvas.
+    
+    Attributes
+    ----------
+    clob : class instance
+        TileCanvas holds instance containing copy of MosaicCreator attributes.
+        Passed from Clicked to TileWindow and then to TileCanvas. See the
+        Clicked class for details of the copied attributes in use.
+    hide_defect_labels : int (0 or 1)
+        Tracks choice whether or not to show defect labels.
+    hide_defect_marks : int (0 or 1)
+        Tracks choice to show defect marks
+    measure_choice : string
+        Variable tracks user's choice of manual measurement on tile canvas.
+    start_x : float
+        X-coordinate representing starting location for drawing areas.
+    start_y : float
+        Y-coordinate representing starting location for drawing areas.
+    new_font_size: int
+        Shared variable for adjusting font sizes upon zoom.
+    imscale : float
+        Scale for the canvas image zoom, will retain all zoom 
+        events within its value. Start at 1.0 value.
+    delta : float
+        Factor by which to scale for a single zoom event.
+    previous_state : int
+        Previous state of the keyboard.
+    path : string
+        File path to the image.
+    imframe : tk frame object
+        Create frame in master window to hold tile canvas.
+    canvas : tk canvas object
+        Tkinter Canvas object to display clicked tile image.
+    image : PIL image object
+        Variable to load the clicked image tile into.
+    imwidth : float
+        Native width of the tile image.
+    imheight : float
+        Native height of the tile image.
+    min_side : float
+        Equal to the smaller image dimension (width vs height).
+    pyramid : list
+        List of PIL images, each scaled by some reduction factor to
+        create a "pyramid" of the same image at different resolutions.
+    curr_img : int
+        Represents the index of the pyramid image selected after zoom event.
+    reduce_factor : float
+        The factor by which to scale each pyramid image's resolution.
+    scale : float
+        Tracks the total amount of scaling by considering both the currently
+        selected pyramid image's resolution and the scale from zoom events.
+    container : tk rectangle object
+        A rectangle object created on the canvas initially at the native
+        size of the tile image. This rectangle remains on the canvas at all
+        times and tracks how the tile image should be scaled after each event.
+        
+    Methods
+    -------
+    grid(**kw)
+        Put CanvasImage widget on the parent widget.
+    scroll_x(*args, **kwargs)
+        Scroll canvas horizontally and redraw the image.
+    scroll_y(*args, **kwargs)
+        Scroll canvas vertically and redraw the image.
+    poly_oval_v2(x0, y0, x1, y1, steps=50, rotation=0)
+        Return an oval as coordinates suitable for create_polygon.
+    show_defects()
+        Plot defects on the selected image.
+    toggle_binning(toggle_choice)
+        Toggle visibility for the desired set of defect binning colors.
+    show_labels()
+        Plot defect labels on selected image.
+    defect_mark_vis()
+        Hide or reveal defect labels and/or marks when toggled.
+    show_image()
+        Show image on the canvas.
+    create_option_buttons()
+        Create option buttons off to the side of the canvas.
+    set_measure_choice(arg)
+        Set which kind of object to draw with the measuring tool.
+    on_right_click(event)
+        Initialize the measurement tool use upon right mouse click.
+    on_right_click_drag(event)
+        Allows for measurement size modification through dragging the mouse.
+    on_right_click_release(event)
+        Finalize measurement upon release of right mouse click.
+    destroy_measure_markers(event)
+        Remove any measurement markers on the canvas.
+    move_from(event)
+        Remember previous coordinates for scrolling with left mouse click.
+    move_to(event)
+        Drag canvas to the new position while holding left mouse click.
+    outside(x, y)
+        Checks if the point (x, y) is outside the image area.
+    wheel(event)
+        Zoom on the tile with mouse wheel.
+    keystroke(event)
+        Scrolling with the keyboard.
+    destroy()
+        Destroy image list, frame, and canvas.
     """
     
     def __init__(self, click_obj, placeholder, path):
@@ -177,29 +320,17 @@ class TileCanvas:
 
         Returns -> None.
         """
-        # TileCanvas holds instance containing 
-        # copies of MosaicCreator variables
         self.clob = click_obj
-        self.hide_defect_labels = None  # tracks choice to show defect labels
-        self.hide_defect_marks = None  # tracks choice to show defect marks
-        # the which_binning_show variable passed from MosaicCreator 
-        # must be updated to instance variable status 
-        # this allows active changes to this variable while tile is open
-        # self.which_binning_show = click_obj.which_binning_show
-        # variable tracks user's choice of manual measurement on tile canvas
+        self.hide_defect_labels = None
+        self.hide_defect_marks = None
         self.measure_choice = None
-        # coordinates which aid in the methods for drawing areas
         self.start_x = None
         self.start_y = None
-        # initialize shared variable for adjusting font sizes upon zoom
         self.new_font_size = None
-        # scale for the canvas image zoom, start at 1.0
-        # will retain all zoom events within its value
         self.imscale = 1.0
-        self.delta = 1.3  # factor by which to scale for a single zoom event
-        self.previous_state = 0  # previous state of the keyboard
-        self.path = path  # path to the image
-        # create frame in master window to hold tile canvas
+        self.delta = 1.3
+        self.previous_state = 0
+        self.path = path
         self.imframe = ttk.Frame(placeholder)
         
         # vertical and horizontal scrollbars for canvas
@@ -243,23 +374,18 @@ class TileCanvas:
         # scrolling with keyboard
         self.canvas.bind('<Key>', lambda event: 
                          self.canvas.after_idle(self.keystroke, event))
-            
-        self.image = Image.open(self.path)  # open the clicked tile image
-        # get native size of clicked tile image
+        
+        # open image and get dimensions
+        self.image = Image.open(self.path)
         self.imwidth = self.image.size[0]
         self.imheight = self.image.size[1]
-        self.min_side = min(self.imwidth, self.imheight)  # smaller image dim
+        self.min_side = min(self.imwidth, self.imheight)
         
-        # We will build an image pyramid to handle the slowdown
-        # caused by attempting to resize and interpolate the 
-        # original high-res tile image over and over during zoom
+        # Build an image pyramid to handle constant image resizing from zoom.
         self.pyramid = [self.image]  # init pyramid list with native image
-        self.curr_img = 0  # tracks which pyramid image to use during zoom
-        # the factor by which to shrink image size
-        # if we set this equal to the zoom scale factor
-        # then we have a one-to-one selection of pyramid
-        # image resolution to total scaling from zoom
-        # using the logarithmic function 
+        self.curr_img = 0
+        # if reduce_factor is set equal to delta we get one-to-one selection 
+        # of pyramid image resolution to total scaling using the log function. 
         # log(curr zoom image scale, pyramid scale factor) = pyramid list index
         self.reduce_factor = 1.3
         w, h = self.pyramid[0].size  # starting width and height
@@ -269,29 +395,19 @@ class TileCanvas:
             h = h / self.reduce_factor
             reduced_image = self.pyramid[-1].resize((int(w), int(h)), 
                                                     Image.LANCZOS)
-            # append scaled image to pyramid list
             self.pyramid.append(reduced_image)
-        # self.scale will track the "total" amount of scaling
-        # needed when cropping and displaying the pyramid image
-        # it will factor in the zoom events (self.imscale)
+        # self.scale will factor in the zoom events (self.imscale)
         # along with the reduction scale of the specific pyramid image
         # for now we will initialize to the same value as self.imscale
         self.scale = self.imscale
             
-        # this invisible rectangle will be used to track the image 
-        # location and size on the canvas
-        # set the rectangle initially to the original image size
-        # it will remain on the canvas at all times, so we always
-        # know how to properly scale and place the image after
-        # selection from the image pyramid during zoom/scrolling
+        # this invisible rectangle will always remain on the canvas 
+        # to be used to track the image location and size
+        # set the rectangle initially to the native image size
         self.container = self.canvas.create_rectangle((0, 0, self.imwidth, 
                                                        self.imheight), width=0)
         
-        # call the method used to scale and show image
-        # this method will be repeatably called anytime
-        # a zoom or scroll event occurs
-        self.show_image()
-        # check if user has selected image view only
+        self.show_image()  # scale and show image
         if self.clob.image_view_only == 0:
             self.show_defects()  # show defects on the canvas
             self.show_labels() # show defect labels on the canvas
@@ -393,14 +509,13 @@ class TileCanvas:
         for idx, def_row in enumerate(self.clob.defect_data):
             if float(def_row[1]) == float(self.clob.sel_irow[0]):
                 # coordinates of defect scaled by image size
+                # also converted to image pixels from microns
                 x = (float(def_row[4]) * box_image[2] 
                      / float(self.clob.sel_irow[9]))
-                # also converted to image pixels from microns
                 y = (float(def_row[5]) * box_image[3] 
                      / float(self.clob.sel_irow[10]))
 
                 # we will plot multiple copies of each defect overlaid
-                # each copy will have a different defect mark color
                 # tags are used to toggle defect visibility for bin type
 
                 # get index corresponding to binning range of defect area
@@ -563,11 +678,9 @@ class TileCanvas:
         """
         # get image coordinates on the canvas 
         # based on our rectangle stand-in for the image
-        # and how that rectangle's coordinates have changed
         box_image = self.canvas.coords(self.container)
-        # get visible area of the canvas
-        # these coords are relative to the window coords
-        # which shift as we scroll the window across the canvas
+        # get visible area coordinates of the canvas
+        # these are relative to the shifting window coordinates from scrolling.
         box_canvas = (self.canvas.canvasx(0),
                       self.canvas.canvasy(0),
                       self.canvas.canvasx(self.canvas.winfo_width()),
@@ -576,17 +689,15 @@ class TileCanvas:
         box_img_int = tuple(map(int, box_image))  # convert image area to int 
         
         # get the region where scrolling will be allowed
-        # choose whichever dimensions will give
-        # the larger scrolling region among the coordinates
-        # of the visible canvas and image regions
+        # choose whichever dimensions will give the larger scrolling region 
+        # among the coordinates of the visible canvas and image regions
         box_scroll = [min(box_img_int[0], box_canvas[0]), 
                       min(box_img_int[1], box_canvas[1]),
                       max(box_img_int[2], box_canvas[2]), 
                       max(box_img_int[3], box_canvas[3])
                       ]
-        # if the horizontal visible region of the canvas
-        # is outside the image region on both ends
-        # the scroll region need not be set that large
+        # if the horizontal visible region of the canvas is outside the image 
+        # region on both ends the scroll region need not be set that large
         # reset to just the image region extent, instead
         if  box_scroll[0] == box_canvas[0] and box_scroll[2] == box_canvas[2]:
             box_scroll[0] = box_img_int[0]
@@ -634,8 +745,7 @@ class TileCanvas:
                 anchor='nw', image=imagetk)
 
             self.canvas.lower(imageid)  # set image into background
-            # make a copy to prevent garbage collection
-            self.canvas.imagetk = imagetk
+            self.canvas.imagetk = imagetk  # prevent garbage collection
 
     def create_option_buttons(self):
         """Create option buttons off to the side of the canvas.
@@ -710,8 +820,9 @@ class TileCanvas:
         self.start_y = self.canvas.canvasy(event.y)
 
     def on_right_click_drag(self, event):
-        """Allows for measurement size modification through dragging
-        the mouse while holding right mouse button.
+        """Allows for measurement size modification through dragging the mouse. 
+        
+        Hold right mouse button while dragging.
         
         Parameters
         ----------
@@ -865,7 +976,8 @@ class TileCanvas:
         self.show_image()
 
     def outside(self, x, y):
-        """Checks if the point (x,y) is outside the image area.
+        """Checks if the point (x, y) is outside the image area.
+        
         Used to determine whether to zoom or not.
         
         Parameters
@@ -929,12 +1041,9 @@ class TileCanvas:
         # take appropriate image from the pyramid
         log_chooser = int(math.log(self.imscale, self.reduce_factor))
         self.curr_img = min((-1) * log_chooser, len(self.pyramid) - 1)
-        # self.imscale alone determines the scale from
-        # only the zoom events that have occured
-        # below we factor in the total reduction scale
-        # of the selected pyramid image by multiplying the total 
-        # zoom scale by the reduction factor a number of times equal to
-        # the index of the pyramid image in the pyramid list
+        # factor in the total reduction scale of the selected pyramid image by 
+        # multiplying the total zoom scale by the reduction factor a number of 
+        # times equal to the index of the pyramid image in the pyramid list
         self.scale = self.imscale * self.reduce_factor**(max(0, self.curr_img))
         # rescale all objects in canvas using scale_inst
         self.canvas.scale('all', x, y, scale_inst, scale_inst)
@@ -952,8 +1061,7 @@ class TileCanvas:
             self.new_font_size = math.ceil(rounding_indicator)
         # once font size of 1 is reached, we need to make sure to 
         # keep track of scaling trends as we continue to demagnify image
-        # if not, we will scale the font size 
-        # too quickly while magnifying the image
+        # if not, we will scale the font size too quickly when zooming back in
         # the line of code below accomplishes the tracking by 
         # essentially recording the current number of scaling events
         self.clob.label_fsize = rounding_indicator 
@@ -966,6 +1074,7 @@ class TileCanvas:
 
     def keystroke(self, event):
         """Scrolling with the keyboard.
+        
         Independent from the language of the keyboard,
         CapsLock, <Ctrl>+<key>, etc.
         
@@ -996,6 +1105,7 @@ class TileCanvas:
 
     def destroy(self):
         """Destroy image list, frame, and canvas.
+        
         Currently not in use.
 
         Returns -> None
